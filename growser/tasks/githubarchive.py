@@ -6,22 +6,28 @@ from growser.services.bigquery import PersistQueryToTable, ExportTableToCSV,\
     DeleteTable
 
 
-class block_until_complete:
-    def __init__(self, job):
-        self.job = job
+class BlockingJobPipeline(object):
+    def __init__(self, service, block_duration: int=5):
+        self.service = service
+        self.block_duration = block_duration
+        self.jobs = []
 
-    def __enter__(self):
-        return self.job
+    def add(self, job, *args, **kwargs):
+        self.jobs.append((job, args, kwargs))
 
-    def __exit__(self, *exc):
-        while not self.job.is_complete:
-            app.logger.info('Job not complete, waiting...')
-            time.sleep(5)
+    def execute(self):
+        for job_class, args, kwargs in self.jobs:
+            app.logger.debug("Running job " + job_class.__name__)
+            job = job_class(self.service)
+            job.run(*args, **kwargs)
+            while not job.is_complete:
+                app.logger.info("Job not complete, waiting...")
+                time.sleep(self.block_duration)
 
 
-def monthly_events(date: datetime):
+def export_monthly_events_to_csv(date: datetime):
+    """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
     date = date.strftime('%Y%m')
-
     app.logger.debug('Monthly events for {}'.format(date))
 
     export_table = app.config.get('EVENTS_EXPORT_TABLE')
@@ -32,13 +38,12 @@ def monthly_events(date: datetime):
     WHERE type IN ('WatchEvent', 'ForkEvent')
     """
 
-    with block_until_complete(PersistQueryToTable(bigquery)) as job:
-        app.logger.debug('Running PersistQueryToTable')
-        job.run(query.format(date), export_table)
+    pipeline = BlockingJobPipeline(bigquery)
+    pipeline.add(PersistQueryToTable, query.format(date), export_table)
+    pipeline.add(ExportTableToCSV, export_table, export_path)
+    pipeline.add(DeleteTable, export_table)
+    pipeline.execute()
 
-    with block_until_complete(ExportTableToCSV(bigquery)) as job:
-        app.logger.debug('Running ExportTableToCSV')
-        job.run(export_table, export_path)
 
-    app.logger.debug("Running DeleteTable")
-    DeleteTable(bigquery).run(export_table)
+def download_events():
+    """Download event archives from Google Cloud Storage to local storage."""
