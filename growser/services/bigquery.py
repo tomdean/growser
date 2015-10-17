@@ -105,11 +105,13 @@ class FetchQueryResults(BigQueryJob):
 
 class DeleteTable(BigQueryJob):
     def run(self, table: str):
+        success = True
         table = _table(self.project_id, table)
         try:
             self.service.tables.delete(**table).execute()
         except HttpError:
-            pass
+            success = False
+        return success
 
     @property
     def is_complete(self):
