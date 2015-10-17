@@ -1,19 +1,14 @@
 from collections import Sized
 from itertools import chain
 
-from apiclient.discovery import build
-from apiclient.errors import HttpError
-from httplib2 import Http
-from oauth2client.client import SignedJwtAssertionCredentials
+from growser.services.google import bigquery, HttpError
 
 
 class BigQueryService(object):
     """Wrapper over google-api-client"""
-    def __init__(self, email: str, private_key: str, project_id: str):
+    def __init__(self, project_id: str, email: str, private_key: str):
         self.project_id = project_id
-        auth = SignedJwtAssertionCredentials(
-            email, private_key, 'https://www.googleapis.com/auth/bigquery')
-        self.api = build('bigquery', 'v2', http=auth.authorize(Http()))
+        self.api = bigquery(email, private_key)
 
     @property
     def jobs(self):
@@ -105,13 +100,11 @@ class FetchQueryResults(BigQueryJob):
 
 class DeleteTable(BigQueryJob):
     def run(self, table: str):
-        success = True
-        table = _table(self.project_id, table)
         try:
-            self.service.tables.delete(**table).execute()
+            self.service.tables.delete(**_table(self.project_id, table)).execute()
+            return True
         except HttpError:
-            success = False
-        return success
+            return False
 
     @property
     def is_complete(self):
@@ -151,9 +144,9 @@ class ExportTableToCSV(BigQueryJob):
 
 
 class QueryResult(Sized):
-    def __init__(self, responses):
-        self._responses = responses
-        self._first = next(self._responses)
+    def __init__(self, pages):
+        self._pages = pages
+        self._first = next(self._pages)
         self.fields = [f['name'] for f in self._first['schema']['fields']]
         self.total_rows = int(self._first['totalRows'])
 
@@ -164,7 +157,7 @@ class QueryResult(Sized):
         return dict(zip(self.fields, self._as_tuple(row)))
 
     def rows(self, as_dict: bool=False):
-        for response in chain([self._first], self._responses):
+        for response in chain([self._first], self._pages):
             transform = self._as_dict if as_dict else self._as_tuple
             yield from (transform(row) for row in response['rows'])
 
