@@ -30,10 +30,12 @@ class BigQueryJob(object):
     def __init__(self, service: BigQueryService):
         self.service = service
         self.project_id = self.service.project_id
-        self.id = ''
+        self.id = None
 
     @property
     def info(self):
+        if not self.id:
+            raise JobNotCompleteException('Job not complete')
         return self._call('get', jobId=self.id)
 
     @property
@@ -51,7 +53,8 @@ class BigQueryJob(object):
         response = method(projectId=self.project_id, **kwargs) \
             .execute(num_retries=self.num_retries)
 
-        self.id = response['jobReference']['jobId']
+        if 'jobReference' in response:
+            self.id = response['jobReference']['jobId']
 
         if 'errors' in response['status']:
             raise JobFailedException(response['status']['errors'])
@@ -100,11 +103,6 @@ class FetchQueryResults(BigQueryJob):
             yield response
 
 
-def _table(project_id, table):
-    id1, id2 = table.split('.')
-    return {'projectId': project_id, 'datasetId': id1, 'tableId': id2}
-
-
 class DeleteTable(BigQueryJob):
     def run(self, table: str):
         table = _table(self.project_id, table)
@@ -112,6 +110,11 @@ class DeleteTable(BigQueryJob):
             self.service.tables.delete(**table).execute()
         except HttpError:
             pass
+
+    @property
+    def is_complete(self):
+        """API has empty response, assume true."""
+        return True
 
 
 class PersistQueryToTable(BigQueryJob):
@@ -173,3 +176,8 @@ class JobNotCompleteException(Exception):
 
 class JobFailedException(Exception):
     pass
+
+
+def _table(project_id, table):
+    id1, id2 = table.split('.')
+    return {'projectId': project_id, 'datasetId': id1, 'tableId': id2}
