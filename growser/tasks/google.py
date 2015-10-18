@@ -27,28 +27,43 @@ class BlockingJobPipeline(object):
                 time.sleep(self.block_duration)
 
 
-def export_monthly_events_to_csv(date: datetime):
+def export_monthly_events_to_csv(for_date: datetime):
     """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
-    date = date.strftime('%Y%m')
-    app.logger.debug('Monthly events for {}'.format(date))
+    month_year = for_date.strftime('%Y%m')
+    app.logger.debug('Monthly events for {}'.format(month_year))
 
     export_table = app.config.get('EVENTS_EXPORT_TABLE')
-    export_path = app.config.get('EVENTS_EXPORT_PATH').format(date)
-    query = """
-        SELECT
-            type,
-            org_id,
-            repo_id,
-            repo_name,
-            actor_login,
-            actor_id,
-            created_at
-        FROM [githubarchive:month.{}]
-        WHERE type IN ('WatchEvent', 'ForkEvent')
-    """
+    export_path = app.config.get('EVENTS_EXPORT_PATH').format(date=month_year)
+
+    # The GitHub archive has a separate schema for 2015 events vs. earlier years
+    if for_date.year >= 2015:
+        query = """
+            SELECT
+                type,
+                org_id,
+                repo_id,
+                repo_name,
+                actor_login,
+                actor_id,
+                created_at
+            FROM [githubarchive:month.{}]
+            WHERE type IN ('WatchEvent', 'ForkEvent')
+        """
+    else:
+        query = """
+            SELECT
+              type,
+              repository_organization,
+              repository_owner,
+              repository_name,
+              actor,
+              created_at
+            FROM [githubarchive:month.{}]
+            WHERE type IN ('WatchEvent', 'ForkEvent')
+        """
 
     pipeline = BlockingJobPipeline(bigquery)
-    pipeline.add(PersistQueryToTable, query.format(date), export_table)
+    pipeline.add(PersistQueryToTable, query.format(month_year), export_table)
     pipeline.add(ExportTableToCSV, export_table, export_path)
     pipeline.add(DeleteTable, export_table)
     pipeline.run()
@@ -64,4 +79,3 @@ def download_csv_files(service):
             archive['name'], filesize))
         DownloadFile(service).run(bucket, archive['name'], "data/events")
         DeleteFile(service).run(bucket, archive['name'])
-
