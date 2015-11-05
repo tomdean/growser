@@ -1,6 +1,5 @@
 from io import FileIO
 import os
-import sys
 
 from apiclient.http import MediaIoBaseDownload
 

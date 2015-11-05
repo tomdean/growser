@@ -9,6 +9,7 @@ from growser.services.storage import DownloadFile, DeleteFile, \
 
 
 class BlockingJobPipeline(object):
+    """Run two or more jobs in serial order."""
     def __init__(self, service, block_duration: int=5):
         self.service = service
         self.block_duration = block_duration
@@ -27,43 +28,55 @@ class BlockingJobPipeline(object):
                 time.sleep(self.block_duration)
 
 
-def export_monthly_events_to_csv(for_date: datetime):
+def export_monthly_events_to_csv(year: int, month: int):
+    _export_query_to_csv("month", year, month)
+
+
+def export_yearly_events_to_csv(year: int):
+    if datetime.now().year == year:
+        raise Exception('Archive not available for current year')
+    _export_query_to_csv("year", year)
+
+
+def _export_query_to_csv(table: str, year: int, month: int=None):
     """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
-    month_year = for_date.strftime('%Y%m')
-    app.logger.debug('Monthly events for {}'.format(month_year))
-
+    month = str(month).zfill(2) if month else ''
+    for_date = '{}{}'.format(year, month)
+    app.logger.debug('Events for {}'.format(for_date))
     export_table = app.config.get('EVENTS_EXPORT_TABLE')
-    export_path = app.config.get('EVENTS_EXPORT_PATH').format(date=month_year)
+    export_path = app.config.get('EVENTS_EXPORT_PATH').format(date=for_date)
 
-    # The GitHub archive has a separate schema for 2015 events vs. earlier years
-    if for_date.year >= 2015:
+    if year >= 2015:
         query = """
             SELECT
-                type,
+                CASE WHEN type = 'WatchEvent' THEN 1 ELSE 2 END AS type,
                 org_id,
                 repo_id,
-                repo_name,
-                actor_login,
+                repo_name AS repo,
+                actor_login AS login,
                 actor_id,
-                created_at
-            FROM [githubarchive:month.{}]
+                TIMESTAMP_TO_USEC(created_at) AS created_at
+            FROM [githubarchive:{table}.{date}]
             WHERE type IN ('WatchEvent', 'ForkEvent')
         """
     else:
         query = """
             SELECT
-              type,
-              repository_organization,
-              repository_owner,
-              repository_name,
-              actor,
-              created_at
-            FROM [githubarchive:month.{}]
+                CASE WHEN type = 'WatchEvent' THEN 1 ELSE 2 END AS type,
+                repository_organization AS org,
+                (repository_owner + '/' + repository_name) AS repo,
+                actor AS login,
+                PARSE_UTC_USEC(created_at) AS created_at
+            FROM [githubarchive:{table}.{date}]
             WHERE type IN ('WatchEvent', 'ForkEvent')
+              AND repository_owner IS NOT NULL
+              AND repository_name IS NOT NULL
         """
 
+    query = query.format(table=table, date=for_date)
+
     pipeline = BlockingJobPipeline(bigquery)
-    pipeline.add(PersistQueryToTable, query.format(month_year), export_table)
+    pipeline.add(PersistQueryToTable, query, export_table)
     pipeline.add(ExportTableToCSV, export_table, export_path)
     pipeline.add(DeleteTable, export_table)
     pipeline.run()
@@ -73,9 +86,8 @@ def download_csv_files(service):
     bucket = app.config.get('GOOGLE_STORAGE_BUCKET')
     archives = FindFilesMatchingPrefix(service).run(bucket, 'events/')
     app.logger.debug("Found {} archives".format(len(archives)))
-    for archive in archives:
-        filesize = round(int(archive['size'])/(1024*1024), 2)
-        app.logger.debug("Downloading {} ({}MB)".format(
-            archive['name'], filesize))
-        DownloadFile(service).run(bucket, archive['name'], "data/events")
-        DeleteFile(service).run(bucket, archive['name'])
+    for file in archives:
+        size = round(int(file['size'])/(1024*1024), 2)
+        app.logger.debug("Downloading {} ({}MB)".format(file['name'], size))
+        DownloadFile(service).run(bucket, file['name'], "data/events")
+        DeleteFile(service).run(bucket, file['name'])

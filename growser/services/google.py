@@ -15,8 +15,7 @@ def storage(account_name, private_key):
 
 
 def __client(service_name, version, account_name, private_key, scope):
-    auth = SignedJwtAssertionCredentials(
-        account_name, private_key, scope)
+    auth = SignedJwtAssertionCredentials(account_name, private_key, scope)
     return build(service_name, version, http=auth.authorize(Http()))
 
 

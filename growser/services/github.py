@@ -13,8 +13,10 @@ def repository(user, name):
 
 
 def stargazers(user, repo, page=1, per_page=100):
-    return fetch(['repos', user, repo, 'stargazers'],
-                 {'per_page': per_page, 'page': page})
+    return fetch(
+        ['repos', user, repo, 'stargazers'],
+        {'per_page': per_page, 'page': page}
+    )
 
 
 def search(source, query, sort='stars', order='desc', page=1, per_page=100):

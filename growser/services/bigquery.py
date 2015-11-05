@@ -6,7 +6,7 @@ from growser.services.google import bigquery, HttpError
 
 class BigQueryService(object):
     """Wrapper over google-api-client"""
-    def __init__(self, project_id: str, email: str, private_key: str):
+    def __init__(self, project_id: str, email: str, private_key: bytes):
         self.project_id = project_id
         self.api = bigquery(email, private_key)
 
@@ -25,7 +25,7 @@ class BigQueryJob(object):
     def __init__(self, service: BigQueryService):
         self.service = service
         self.project_id = self.service.project_id
-        self.id = None
+        self.id = ''
 
     @property
     def info(self):
@@ -45,16 +45,13 @@ class BigQueryJob(object):
 
     def _call(self, api: str, **kwargs):
         method = getattr(self.service.jobs, api)
-        response = method(projectId=self.project_id, **kwargs) \
+        rv = method(projectId=self.project_id, **kwargs) \
             .execute(num_retries=self.num_retries)
-
-        if 'jobReference' in response:
-            self.id = response['jobReference']['jobId']
-
-        if 'errors' in response['status']:
-            raise JobFailedException(response['status']['errors'])
-
-        return response
+        if 'jobReference' in rv:
+            self.id = rv['jobReference']['jobId']
+        if 'errors' in rv['status']:
+            raise JobFailedException(rv['status']['errors'])
+        return rv
 
 
 class ExecuteQuery(BigQueryJob):
@@ -91,20 +88,21 @@ class FetchQueryResults(BigQueryJob):
         kwargs = {'jobId': self.id}
         has_token = True
         while has_token:
-            response = self._call('getQueryResults', **kwargs)
-            has_token = 'pageToken' in response
+            rv = self._call('getQueryResults', **kwargs)
+            has_token = 'pageToken' in rv
             if has_token:
-                kwargs['pageToken'] = response['pageToken']
-            yield response
+                kwargs['pageToken'] = rv['pageToken']
+            yield rv
 
 
 class DeleteTable(BigQueryJob):
     def run(self, table: str):
         try:
-            self.service.tables.delete(**_table(self.project_id, table)).execute()
-            return True
+            self.service.tables.delete(
+                **_table(self.project_id, table)).execute()
         except HttpError:
             return False
+        return True
 
     @property
     def is_complete(self):
@@ -120,6 +118,7 @@ class PersistQueryToTable(BigQueryJob):
             'configuration': {
                 'query': {
                     'query': query,
+                    'allowLargeResults': True,
                     'destinationTable': _table(self.project_id, destination)
                 }
             }
@@ -150,15 +149,15 @@ class QueryResult(Sized):
         self.fields = [f['name'] for f in self._first['schema']['fields']]
         self.total_rows = int(self._first['totalRows'])
 
-    def _as_tuple(self, row):
-        return list(map(lambda x: x['v'], row['f']))
-
-    def _as_dict(self, row):
-        return dict(zip(self.fields, self._as_tuple(row)))
-
     def rows(self, as_dict: bool=False):
+        def to_tuple(row):
+            return list(map(lambda x: x['v'], row['f']))
+
+        def to_dict(row):
+            return dict(zip(self.fields, to_tuple(row)))
+
         for response in chain([self._first], self._pages):
-            transform = self._as_dict if as_dict else self._as_tuple
+            transform = to_dict if as_dict else to_tuple
             yield from (transform(row) for row in response['rows'])
 
     def __len__(self):
