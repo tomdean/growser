@@ -1,7 +1,10 @@
 Flask>=0.10.1
+Flask-SQLAlchemy>=2.1
 google-api-python-client>=1.4.2
 numpy>=1.10.1
 pandas>=0.17.0
-SQLAlchemy>=1.0.9
-pyOpenSSL>=0.15.1
 pycrypto>=2.6.1
+pyOpenSSL>=0.15.1
+requests>=2.8.1
+responses
+SQLAlchemy>=1.0.9
