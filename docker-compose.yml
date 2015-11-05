@@ -1,0 +1,24 @@
+web:
+  restart: always
+  build: ./
+  expose:
+    - "5000:5000"
+  environment:
+    - PYTHONPATH=/usr/src/app/
+    - GROWSER_CONFIG=/usr/src/app/growser.cfg
+  command: python -m growser.web
+
+data:
+  restart: always
+  image: postgres:9.4
+  volumes:
+    - /var/lib/postgresql
+  command: "true"
+
+postgres:
+  restart: always
+  image: postgres:9.4
+  volumes_from:
+    - data
+  ports:
+    - "5432:5432"
