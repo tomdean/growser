@@ -27,7 +27,7 @@ class BaseJob(object):
 
 class DownloadFile(BaseJob):
     def run(self, bucket: str, obj: str, destination_path: str):
-        archive = self.api.objects().get_media(bucket=bucket, object=obj)
+        archive = self.api.objects.get_media(bucket=bucket, object=obj)
         filename = os.path.join(destination_path, os.path.basename(obj))
         with FileIO(filename, 'wb') as fh:
             downloader = MediaIoBaseDownload(fh, archive, chunksize=1024*1024)
@@ -39,7 +39,7 @@ class DownloadFile(BaseJob):
 class DeleteFile(BaseJob):
     def run(self, bucket: str, obj: str):
         try:
-            self.api.objects().delete(bucket=bucket, object=obj).execute()
+            self.api.objects.delete(bucket=bucket, object=obj).execute()
             return True
         except HttpError:
             return False
@@ -47,6 +47,6 @@ class DeleteFile(BaseJob):
 
 class FindFilesMatchingPrefix(BaseJob):
     def run(self, bucket: str, prefix: str):
-        response = self.api.objects() \
+        response = self.api.objects \
             .list(bucket=bucket, prefix=prefix).execute()
         return [i for i in response['items'] if 'gz' in i['name']]
