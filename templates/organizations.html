@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+
+{% block title %}Top Organizations{% endblock %}
+{% block body %}
+    <div class="jumbotron" style="margin-top: -20px; padding-top: 16px; padding-bottom: 24px;">
+        <div class="container">
+            <h2>Top Organizations</h2>
+        </div>
+    </div>
+    <div class="container">
+        <div class="row">
+            <div class="col-md-2">
+                <div class="list-group">
+                  <a href="#" class="list-group-item active">All-Time</a>
+                  <a href="#" class="list-group-item">This Week</a>
+                  <a href="#" class="list-group-item">This Month</a>
+                  <a href="#" class="list-group-item">Last Month</a>
+                  <a href="#" class="list-group-item">This Year</a>
+                </div>
+            </div>
+            <div class="col-md-9">
+                <table class="table">
+                    <tr>
+                        <th>Organization</th>
+                        <th>Projects</th>
+                    </tr>
+                {% for org in results %}
+                    <tr>
+                        <td><a href="{{ url_for("organization", name=org.organization) }}">{{ org.organization }}</a></td>
+                        <td>{{ org.num_projects }}</td>
+                    </tr>
+                {% endfor %}
+                </table>
+            </div>
+        </div>
+    </div>
+{% endblock %}

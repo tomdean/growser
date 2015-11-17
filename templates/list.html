@@ -1,0 +1,41 @@
+{% macro repositories(repos) -%}
+    <table class="table">
+        <tr>
+            <th>Name</th>
+            <th>Language</th>
+            <th>Description</th>
+            <th>Events</th>
+        </tr>
+    {%- for repo in repos %}
+        <tr>
+            <td>
+                <a href="https://github.com/{{ repo.name }}" class="octicon octicon-mark-github" target="_blank"></a> &nbsp;
+                <a href="{{ url_for('repository', name=repo.name) }}">{{ repo.name }}</a>
+            </td>
+            <td class="small">
+                {%- if repo.language -%}
+                <a href="{{ url_for('language', name=repo.language) }}">{{ repo.language }}</a>
+                {%- endif -%}
+            </td>
+            <td class="small">{{ repo.description|truncate(170, False) }}</td>
+            <td clalss="small">{{ "{:,.0f}".format(repo.num_unique) }}</td>
+        </tr>
+    {%- endfor %}
+    </table>
+{%- endmacro %}
+
+{% macro repositories2(repos) -%}
+    {% for repo in repos %}
+    <div style="margin-bottom: 10px;">
+        <h4><a href="{{ url_for('repository', name=repo.name) }}">{{ repo.name }}</a></h4>
+        <div>{{ repo.description }}</div>
+        <span class="small">
+            <span class="glyphicon glyphicon-star" aria-hidden="true"></span> {{ "{:,.0f}".format(repo.num_unique) }}
+            {% if repo.language %}
+            / <a href="{{ url_for('language', name=repo.language) }}">{{ repo.language }}</a>
+            {% endif %}
+            / <a href="https://github.com/{{repo.name}}" class="glyphicon glyphicon-download-alt"></a>
+        </span>
+    </div>
+    {% endfor %}
+{%- endmacro %}

@@ -1,0 +1,95 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ repo.name }}{% endblock %}
+{% block body %}
+
+    <div class="jumbotron" style="margin-top: -20px; padding-top: 16px; padding-bottom: 24px;">
+        <div class="container">
+            <h2>{{ repo.name }} <small><a href="{{ url_for("language", name=repo.language) }}">{{ repo.language }}</a></small></h2>
+            <div>
+                <a href="https://github.com/{{ repo.name }}" class="octicon octicon-mark-github" target="_blank"></a> {{ repo.description }} ( {{ repo.repo_id }} )
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div id="daily_events" style="width: 100%; height: 200px;"></div>
+    </div>
+
+    <div class="container"><div id="repository-list"></div></div>
+{% endblock %}
+
+{% block footer %}
+    <script>
+    var repo_id = {{ repo.repo_id}};
+    var model_id = 1;
+    </script>
+
+    <script src="/static/amcharts/amcharts.js"></script>
+    <script src="/static/amcharts/serial.js"></script>
+
+    <script src="/static/react/react.js"></script>
+    <script src="/static/react/react-dom.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
+
+    <script type="text/babel" src="/static/test.js"></script>
+
+    {% raw %}
+    <script>
+    $(document).ready(function() {
+
+        $.getJSON("/api/v1/daily_events/" + repo_id, function(data) {
+            var chart = AmCharts.makeChart("daily_events", {
+                "type": "serial",
+                "theme": "light",
+                "autoMarginOffset": 0,
+                "marginTop": 7,
+                "legend": {
+                    "useGraphSettings": true,
+                    "equalWidths": false,
+                    "spacing": 5,
+                    "align": "center"
+                },
+                "dataProvider": data["result"],
+                "valueAxes": [{
+                    "axisAlpha": 0.2,
+                    "dashLength": 1,
+                    "position": "left"
+                }],
+                colors: ["#696969", "#000", "#f00"],
+                "mouseWheelZoomEnabled": true,
+                "graphs": [{
+                    "id": "g1",
+                    "balloonText": "[[category]]<br/><b><span style='font-size:14px;'>value: [[value]]</span></b>",
+                    "title": "# of Events",
+                    "valueField": "num_events",
+                    "connect": false
+                }, {
+                    "id": "g2",
+                    "title": "Daily Average",
+                    "valueField": "num_events_avg"
+                }, {
+                    "id": "g3",
+                    "title": "30-day Rolling Average",
+                    "valueField": "num_events_m30"
+                }],
+                "chartScrollbar": {
+                    "autoGridCount": true,
+                    "graph": "g1",
+                    "scrollbarHeight": 20
+                },
+                "categoryField": "date",
+                "categoryAxis": {
+                    "parseDates": true,
+                    "axisColor": "#DADADA",
+                    "dashLength": 1,
+                    "minorGridEnabled": true
+                }
+            });
+        });
+    });
+    </script>
+    {% endraw %}
+
+{% endblock %}
+
