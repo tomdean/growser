@@ -13,6 +13,7 @@ data:
   image: postgres:9.4
   volumes:
     - /var/lib/postgresql
+    - ./data:/data
   command: "true"
 
 postgres:
