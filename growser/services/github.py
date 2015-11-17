@@ -5,7 +5,7 @@ from requests import get
 def fetch(path, params=None):
     data = get('https://api.github.com/' + '/'.join(path),
                auth=app.config.get('GITHUB_OAUTH'), params=params)
-    return data.content.decode('utf-8')
+    return data.content
 
 
 def repository(user, name):

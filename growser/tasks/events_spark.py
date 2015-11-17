@@ -18,6 +18,11 @@ def convert_row(row):
     return (row[3], row[2]), (int(row[0]), int(int(row[4])/1000000), 1)
 
 
+def save(df: pd.DataFrame, path: str):
+    df.write.format('com.databricks.spark.csv') \
+        .options(header="true").save(path)
+
+
 def process_events_dataframes(path):
     """Process the Github Archive logs using Apache Spark & DataFrames."""
     rdd = sc.textFile(path) \
@@ -75,17 +80,9 @@ def process_events_dataframes(path):
         JOIN repos AS rr ON rr.repo = r.repo
     """)
 
-    final.write.format('com.databricks.spark.csv') \
-        .options(header="true") \
-        .save('data/csv/ratings/')
-
-    logins.write.format('com.databricks.spark.csv') \
-        .options(header="true") \
-        .save('data/csv/logins/')
-
-    repos.write.format('com.databricks.spark.csv') \
-        .options(header="true") \
-        .save('data/csv/repos/')
+    save(final, 'data/csv/ratings/')
+    save(logins, 'data/csv/logins/')
+    save(repos, 'data/csv/repos/')
 
 
 def process_events(path):
@@ -133,15 +130,6 @@ def process_events(path):
         JOIN repos AS rr ON rr.repo = r.repo
     """)
 
-    final.write.format('com.databricks.spark.csv') \
-        .options(header="true") \
-        .save('data/csv/ratings/')
-
-    logins.write.format('com.databricks.spark.csv') \
-        .options(header="true") \
-        .save('data/csv/logins/')
-
-    repos.write.format('com.databricks.spark.csv') \
-        .options(header="true") \
-        .save('data/csv/repos/')
-
+    save(final, 'data/csv/ratings/')
+    save(logins, 'data/csv/logins/')
+    save(repos, 'data/csv/repos/')

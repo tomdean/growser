@@ -7,6 +7,7 @@ from growser.app import app
 
 MIN_REPO_EVENTS = 75
 MIN_LOGIN_EVENTS = 25
+MAX_LOGIN_EVENTS = 1000
 
 
 def process_events(path="data/events/events_*.gz"):
@@ -14,20 +15,26 @@ def process_events(path="data/events/events_*.gz"):
 
     1. Assign unique IDs to logins & repositories
         a. Replace values for renamed repositories (e.g. node)
-    2.
+    2. De-duplicate events by user/repo/type
+    3. De-duplicate events by user/repo
+        a. Star=1, Forked=2, Star+Forked=3
+    4. Save to CSV
 
     :param path: Location of the gzip archives
     """
     app.logger.info("Processing GitHub Archive files")
-    events = _get_events_dataframe(path, _get_renamed_repositories())
-    repos = _distinct_values(events, 'repo', 'login')
-    logins = _distinct_values(events, 'login', 'repo')
+    events = _get_events_dataframe(path)
 
-    # Filter to logins & repos with a minimum amount of activity
-    min_repos = repos[repos['unique'] >= MIN_REPO_EVENTS]
-    min_logins = logins[logins['unique'] >= MIN_LOGIN_EVENTS]
+    # Find all logins & repos and assign them unique IDs
+    repos = _unique_values(events, 'repo', 'login')
+    logins = _unique_values(events, 'login', 'repo')
 
-    # Update events to use numeric repo/login IDs along with any redirects
+    # Filter logins & repos to prune outliers and items with too little activity
+    min_repos = repos[repos['num_unique'] >= MIN_REPO_EVENTS]
+    min_logins = logins[(logins['num_unique'] >= MIN_LOGIN_EVENTS) &
+                        (logins['num_unique'] <= MAX_LOGIN_EVENTS)]
+
+    # Update events to use numeric repo/login IDs
     app.logger.info("Filter events to repos & logins with min # of events")
     fields = ['type', 'repo_id', 'login_id', 'created_at_x']
     events = pd.merge(events, min_repos, on='repo')
@@ -48,41 +55,51 @@ def process_events(path="data/events/events_*.gz"):
         .rename(columns={'type': 'rating'})
 
     # Pre-sort so that most starred repositories are at the top
-    repos.sort_values(['unique', 'repo'], ascending=False, inplace=True)
+    repos.sort_values(['num_unique', 'repo'], ascending=False, inplace=True)
 
     app.logger.info("Writing results to CSV")
+    repos = repos.rename(columns={'repo': 'name'})
+    logins = logins.rename(columns={'login': 'name'})
     repos.to_csv('data/csv/repos.csv', header=True, index=False)
     logins.to_csv('data/csv/logins.csv', header=True, index=False)
-    final.to_csv('data/csv/ratings.csv', header=True, index=False)
+    final[['repo_id', 'login_id', 'rating', 'created_at']] \
+        .to_csv('data/csv/ratings.csv', header=None, index=False)
 
 
-def _distinct_values(df: pd.DataFrame, column: str, unique: str) -> pd.DataFrame:
+def _unique_values(df: pd.DataFrame, column: str, unique: str) -> pd.DataFrame:
     # Extract unique values from a `pandas.Series` sorted by earliest timestamp
     rv = df.groupby(column) \
         .agg({'created_at': [np.amin, np.count_nonzero],
               unique: lambda x: len(x.unique())}) \
         .reset_index()
-    rv.columns = [column, 'unique', 'created_at', 'num_rows']
+    rv.columns = rv.columns.droplevel(0)
+    rv = rv.rename(columns={
+        '': column,
+        '<lambda>': 'num_unique',
+        'amin': 'created_at',
+        'count_nonzero': 'num_events'
+    })
+    columns = [column + '_id', column, 'num_events', 'num_unique', 'created_at']
     return rv.sort_values(['created_at', column]) \
         .reset_index(drop=True) \
         .reset_index() \
-        .rename(columns={'index': column + '_id'})
+        .rename(columns={'index': column + '_id'})[columns]
 
 
 def _get_renamed_repositories() -> pd.DataFrame:
+    """Returns a mapping of repositories that have been renamed"""
     rv = open("data/github/redirects.csv").read().split("\n")
     rv = [r for r in map(lambda x: x.split(","), rv) if len(r) == 2]
     return pd.DataFrame(rv, columns=["repo", "to"])
 
 
-def _get_events_dataframe(path: str, renamed: pd.DataFrame) -> pd.DataFrame:
+def _get_events_dataframe(path: str) -> pd.DataFrame:
     files = glob.glob(path)
     fields = ['type', 'repo', 'login', 'created_at']
-    dtypes = {'type': np.int,
-              'repo': np.object,
-              'login': np.object,
-              'created_at': np.long}
+    dtypes = {'type': np.int, 'repo': np.object,
+              'login': np.object, 'created_at': np.long}
     rv = []
+    renamed = _get_renamed_repositories()
     for file in files:
         app.logger.debug("Processing " + file)
         df = pd.read_csv(file, engine='c', usecols=fields, dtype=dtypes)
