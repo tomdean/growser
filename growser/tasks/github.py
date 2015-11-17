@@ -31,7 +31,7 @@ def update_repository_data():
         filename = "data/github-api/{}.json.gz".format(repo.repo_id)
         if os.path.exists(filename):
             last_checked = (time.time() - os.path.getmtime(filename)) / (60*60)
-            if last_checked < 48:
+            if last_checked >= 48:
                 continue
         app.logger.debug("Fetching {} ({})".format(repo.name, idx))
         content = github.repository(*repo.name.split("/"))
