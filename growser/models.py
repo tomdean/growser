@@ -11,11 +11,16 @@ db = SQLAlchemy(app)
 class Repository(db.Model):
     repo_id = Column(Integer, primary_key=True)
     name = Column(String(256), nullable=False)
+    owner = Column(String(256), nullable=False)
     organization = Column(String(256), nullable=False)
-    language = Column(String(32), nullable=True)
-    description = Column(String(2048), nullable=True)
+    language = Column(String(32), nullable=False)
+    description = Column(String(2048), nullable=False)
     num_events = Column(Integer, nullable=False)
     num_unique = Column(Integer, nullable=False)
+    num_stars = Column(Integer, nullable=False)
+    num_forks = Column(Integer, nullable=False)
+    num_watchers = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, nullable=False)
 
 
@@ -44,7 +49,6 @@ class Recommendation(db.Model):
     repo_id = Column(Integer, primary_key=True)
     recommended_repo_id = Column(Integer, primary_key=True)
     score = Column(Float, nullable=False)
-
     repository = relationship(
         Repository,
         foreign_keys=Repository.repo_id,
