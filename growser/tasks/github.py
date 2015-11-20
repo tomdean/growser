@@ -17,7 +17,7 @@ def get_rate_limit():
 
 def get_with_retry(user: str, name: str):
     rv = github.repository(user, name)
-    if 'rate limit exceeded' in rv:
+    if b'rate limit' in rv:
         reset = get_rate_limit() - int(time.time())
         app.logger.info("Sleeping for {}".format(reset))
         time.sleep(reset)
@@ -30,10 +30,8 @@ def update_repository_data():
     for idx, repo in enumerate(top.all()):
         filename = "data/github-api/{}.json.gz".format(repo.repo_id)
         if os.path.exists(filename):
-            last_checked = (time.time() - os.path.getmtime(filename)) / (60*60)
-            if last_checked >= 48:
-                continue
+            continue
         app.logger.debug("Fetching {} ({})".format(repo.name, idx))
-        content = github.repository(*repo.name.split("/"))
+        content = get_with_retry(*repo.name.split("/"))
         with gzip.open(filename, "wb") as gz:
             gz.write(content)
