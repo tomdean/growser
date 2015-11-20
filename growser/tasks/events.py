@@ -59,7 +59,8 @@ def process_events(path="data/events/events_*.gz"):
     logins = logins.rename(columns={'login': 'name'})
     repos.to_csv('data/csv/repos.csv', header=True, index=False)
     logins.to_csv('data/csv/logins.csv', header=True, index=False)
-    final.to_csv('data/csv/ratings.csv', header=None, index=False)
+    final[['login_id', 'repo_id', 'rating', 'created_at']] \
+        .to_csv('data/csv/ratings.csv', header=None, index=False)
 
 
 def _unique_values(df: pd.DataFrame, column: str, unique: str) -> pd.DataFrame:
