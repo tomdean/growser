@@ -54,16 +54,12 @@ def process_events(path="data/events/events_*.gz"):
         .reset_index() \
         .rename(columns={'type': 'rating'})
 
-    # Pre-sort so that most starred repositories are at the top
-    repos.sort_values(['num_unique', 'repo'], ascending=False, inplace=True)
-
     app.logger.info("Writing results to CSV")
     repos = repos.rename(columns={'repo': 'name'})
     logins = logins.rename(columns={'login': 'name'})
     repos.to_csv('data/csv/repos.csv', header=True, index=False)
     logins.to_csv('data/csv/logins.csv', header=True, index=False)
-    final[['repo_id', 'login_id', 'rating', 'created_at']] \
-        .to_csv('data/csv/ratings.csv', header=None, index=False)
+    final.to_csv('data/csv/ratings.csv', header=None, index=False)
 
 
 def _unique_values(df: pd.DataFrame, column: str, unique: str) -> pd.DataFrame:
