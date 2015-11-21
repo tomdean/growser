@@ -16,7 +16,7 @@ class GithubAPITestCase(unittest.TestCase):
         url = self.base_url + '/repos/twbs/bootstrap'
         body = '{"id": 2126244, "name": "bootstrap", "full_name": "twbs/bootstrap"}'
         responses.add(responses.GET, url, body, content_type='application/json')
-        result = json.loads(github.repository('twbs', 'bootstrap'))
+        result = json.loads(github.repository('twbs', 'bootstrap').decode('UTF-8'))
         body_js = json.loads(body)
         self.assertEqual(responses.calls[0].request.url, url)
         self.assertEqual(body_js['id'], result['id'])
@@ -33,14 +33,14 @@ class GithubAPITestCase(unittest.TestCase):
             "rate": {"limit": 60, "remaining": 60, "reset": 1445038877}
         })
         responses.add(responses.GET, url, body, content_type='application/json')
-        result = json.loads(github.rate_limit())
+        result = json.loads(github.rate_limit().decode("UTF-8"))
         self.assertEqual(responses.calls[0].request.url, url)
         self.assertEqual(result['resources']['core']['remaining'], core)
 
     @responses.activate
     def test_stargazers(self):
         url = re.compile(self.base_url + "/repos/twbs/bootstrap/stargazers")
-        body = '[{"login": "twbs", "id": 77083}]'
+        body = b'[{"login": "twbs", "id": 77083}]'
         responses.add(responses.GET, url, body, content_type='application/json')
         response = github.stargazers("twbs", "bootstrap")
         self.assertEqual(response, body)
