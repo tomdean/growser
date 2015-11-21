@@ -1,6 +1,6 @@
 # Growser
 
-<img src="static/screenshot.gif" align="left" hspace="10" vspace="6" />
+<img src="static/screenshot.gif" align="right" hspace="10" vspace="6" />
 
 A recommendation engine and project explorer for GitHub.com.
 
@@ -17,3 +17,5 @@ A recommendation engine and project explorer for GitHub.com.
 ## Setup
 
 ### Google Cloud
+
+A Google Cloud account with Cloud Storage & BigQuery enabled is required to extract data from the [GitHub Archive public dataset](https://www.githubarchive.org/).
