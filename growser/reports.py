@@ -23,13 +23,13 @@ def daily_events_by_repo(repo_id):
     return df.to_dict("records")
 
 
-def top_organizations(limit: int):
+def top_owners(limit: int):
     rv = db.session.query(
-            Repository.organization,
+            Repository.owner,
             func.SUM(Repository.num_unique).label("num_unique"),
             func.SUM(Repository.num_events).label("num_events"),
             func.COUNT(Repository.repo_id).label("num_projects")) \
-        .group_by(Repository.organization)\
+        .group_by(Repository.owner)\
         .order_by(func.SUM(Repository.num_unique).desc()) \
         .limit(limit) \
         .all()

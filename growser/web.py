@@ -11,7 +11,7 @@ from growser.models import Recommendation, RecommendationModel
 @app.route("/")
 def index():
     """Interesting repositories."""
-    return "index"
+    return render_template("index.html")
 
 
 @app.route("/r/<path:name>")
@@ -21,16 +21,21 @@ def repository(name: str):
     return render_template("repository.html", repo=repo)
 
 
+@app.route("/r/<path:name>/timeline")
+def timeline(name: str):
+    return "test"
+
+
 @app.route("/o/<name>")
 def organization(name: str):
-    results = Repository.query.filter(Repository.organization == name) \
+    results = Repository.query.filter(Repository.owner == name) \
         .order_by(Repository.num_unique.desc()).all()
     return render_template("organization.html", results=results, org=name)
 
 
 @app.route("/o/")
 def organizations():
-    results = reports.top_organizations(100)
+    results = reports.top_owners(100)
     return render_template("organizations.html", results=results)
 
 
