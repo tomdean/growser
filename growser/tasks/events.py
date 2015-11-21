@@ -26,11 +26,11 @@ def process_events(path="data/events/events_*.gz"):
     events = _get_events_dataframe(path)
 
     # Find all logins & repos and assign them unique IDs
-    repos = _unique_values(events, 'repo', 'login')
+    repositories = _unique_values(events, 'repo', 'login')
     logins = _unique_values(events, 'login', 'repo')
 
     # Filter logins & repos to prune outliers and items with too little activity
-    min_repos = repos[repos['num_unique'] >= MIN_REPO_EVENTS]
+    min_repos = repositories[repositories['num_unique'] >= MIN_REPO_EVENTS]
     min_logins = logins[(logins['num_unique'] >= MIN_LOGIN_EVENTS) &
                         (logins['num_unique'] <= MAX_LOGIN_EVENTS)]
 
@@ -55,12 +55,20 @@ def process_events(path="data/events/events_*.gz"):
         .rename(columns={'type': 'rating'})
 
     app.logger.info("Writing results to CSV")
-    repos = repos.rename(columns={'repo': 'name'})
+    repositories = repositories.rename(columns={'repo': 'name'})
     logins = logins.rename(columns={'login': 'name'})
-    repos.to_csv('data/csv/repos.csv', header=True, index=False)
-    logins.to_csv('data/csv/logins.csv', header=True, index=False)
-    final[['login_id', 'repo_id', 'rating', 'created_at']] \
-        .to_csv('data/csv/ratings.csv', header=None, index=False)
+    ratings = final[['login_id', 'repo_id', 'rating', 'created_at']].copy(False)
+
+    def to_csv(df: pd.DataFrame, name: str):
+        df.to_csv("data/csv/{}.csv".format(name), header=True, index=False)
+
+    to_csv(repositories, 'repos')
+    to_csv(logins, 'logins')
+    to_csv(ratings, 'ratings')
+
+    # Make a copy to import into SQL
+    ratings['created_at'] = pd.to_datetime(final['created_at'], unit='s')
+    to_csv(ratings, 'ratings.datetime')
 
 
 def _unique_values(df: pd.DataFrame, column: str, unique: str) -> pd.DataFrame:

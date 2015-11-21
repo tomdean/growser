@@ -1,3 +1,4 @@
+import json
 import logging
 
 from flask import Flask
@@ -10,8 +11,9 @@ app.config.from_object('growser.config.BasicConfig')
 app.config.from_envvar('GROWSER_CONFIG', False)
 app.debug = True
 
-with open(app.config.get('BIGQUERY_PRIVATE_KEY'), 'rb') as fh:
-    key = fh.read()
+with open(app.config.get('GOOGLE_CLIENT_KEY')) as fh:
+    js = json.loads(fh.read())
 
-bigquery = BigQueryService(app.config.get('BIGQUERY_PROJECT_ID'),
-                           app.config.get('BIGQUERY_EMAIL'), key)
+bigquery = BigQueryService(app.config.get('GOOGLE_PROJECT_ID'),
+                           js['client_email'],
+                           bytes(js['private_key'], 'UTF-8'))

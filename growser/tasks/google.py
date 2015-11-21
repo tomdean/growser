@@ -1,5 +1,6 @@
 from datetime import datetime
 import time
+import os
 
 from growser.app import app, bigquery
 from growser.services.bigquery import PersistQueryToTable, ExportTableToCSV, \
@@ -40,12 +41,9 @@ def export_yearly_events_to_csv(year: int):
 
 def _export_query_to_csv(table: str, year: int, month: int=None):
     """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
-    month = str(month).zfill(2) if month else ''
+    month = str(month).zfill(2) if month else ''  # Pad with leading 0
     for_date = '{}{}'.format(year, month)
     app.logger.debug('Events for {}'.format(for_date))
-    export_table = app.config.get('EVENTS_EXPORT_TABLE')
-    export_path = app.config.get('EVENTS_EXPORT_PATH').format(date=for_date)
-
     if year >= 2015:
         query = """
             SELECT
@@ -73,6 +71,8 @@ def _export_query_to_csv(table: str, year: int, month: int=None):
               AND repository_name IS NOT NULL
         """
 
+    export_table = app.config.get('BIG_QUERY_EXPORT_TABLE')
+    export_path = app.config.get('BIG_QUERY_EXPORT_PATH').format(date=for_date)
     query = query.format(table=table, date=for_date)
 
     pipeline = BlockingJobPipeline(bigquery)
@@ -83,11 +83,15 @@ def _export_query_to_csv(table: str, year: int, month: int=None):
 
 
 def download_csv_files(service):
-    bucket = app.config.get('GOOGLE_STORAGE_BUCKET')
-    archives = FindFilesMatchingPrefix(service).run(bucket, 'events/')
+    """Download all files in the export folder and delete them."""
+    export_path = app.config.get('BIG_QUERY_EXPORT_PATH').replace("gs://", "")
+    bucket, path = os.path.dirname(export_path).split("/", 1)
+
+    archives = FindFilesMatchingPrefix(service).run(bucket, path)
     app.logger.debug("Found {} archives".format(len(archives)))
     for file in archives:
         size = round(int(file['size'])/(1024*1024), 2)
         app.logger.debug("Downloading {} ({}MB)".format(file['name'], size))
-        DownloadFile(service).run(bucket, file['name'], "data/events")
+        DownloadFile(service).run(bucket, file['name'],
+                                  app.config.get('LOCAL_IMPORT_PATH'))
         DeleteFile(service).run(bucket, file['name'])
