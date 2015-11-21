@@ -2,14 +2,30 @@
 
 {% block title %}{{ repo.name }}{% endblock %}
 {% block body %}
+    <style>
+    #subheader { padding: 0; margin-top: -20px; border-bottom: 1px solid #ddd; }
+    #menu { margin-top: 16px; margin-bottom: -1px; }
+    .nav-tabs > li.active > a, .nav-tabs > li.active > a:hover { border-top: 3px solid #d26911; }
+    .nav-tabs > li > a:hover { border-bottom: 0; }
+    </style>
 
-    <div class="jumbotron" style="margin-top: -20px; padding-top: 16px; padding-bottom: 24px;">
+    <div class="jumbotron" id="subheader">
         <div class="container">
             <h2>{{ repo.name }} <small><a href="{{ url_for("language", name=repo.language) }}">{{ repo.language }}</a></small></h2>
             <div>
                 <a href="https://github.com/{{ repo.name }}" class="octicon octicon-mark-github" target="_blank"></a> {{ repo.description }} ( {{ repo.repo_id }} )
             </div>
         </div>
+
+        <div id="menu" class="container">
+            <ul class="nav nav-tabs">
+              <li role="presentation" class="active"><a href="{{ url_for("repository", name=repo.name) }}">Related Projects</a></li>
+              <li role="presentation"><a href="{{ url_for("timeline", name=repo.name) }}">Timeline</a></li>
+                <li role="presentation"><a href="#">Compare</a></li>
+              <li role="presentation"><a href="https://github.com/{{repo.name}}">GitHub</a></li>
+            </ul>
+        </div>
+
     </div>
 
     <div class="container">
@@ -27,11 +43,9 @@
 
     <script src="/static/amcharts/amcharts.js"></script>
     <script src="/static/amcharts/serial.js"></script>
-
     <script src="/static/react/react.js"></script>
     <script src="/static/react/react-dom.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-core/5.8.23/browser.min.js"></script>
-
     <script type="text/babel" src="/static/test.js"></script>
 
     {% raw %}
