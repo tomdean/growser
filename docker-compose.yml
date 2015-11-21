@@ -1,16 +1,32 @@
 web:
   restart: always
   build: ./
-  expose:
+  ports:
+    - "8000:8000"
     - "5000:5000"
+  volumes:
+    - /usr/src/app/static
+  links:
+    - postgres:postgres
   environment:
     - PYTHONPATH=/usr/src/app/
     - GROWSER_CONFIG=/usr/src/app/growser.cfg
-  command: python -m growser.web
+  command: gunicorn -b :8000 growser.web:app
+
+nginx:
+  restart: always
+  build: ./deploy/nginx/
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes_from:
+    - web
+  links:
+    - web:web
 
 data:
   restart: always
-  image: postgres:9.4
+  build: ./deploy/postgres/
   volumes:
     - /var/lib/postgresql
     - ./data:/data
@@ -18,7 +34,7 @@ data:
 
 postgres:
   restart: always
-  image: postgres:9.4
+  build: ./deploy/postgres/
   volumes_from:
     - data
   ports:
