@@ -56,7 +56,6 @@ def process_events(path="data/events/events_*.gz"):
 
     app.logger.info("Writing results to CSV")
     repositories = repositories.rename(columns={'repo': 'name'})
-    logins = logins.rename(columns={'login': 'name'})
     ratings = final[['login_id', 'repo_id', 'rating', 'created_at']].copy(False)
 
     def to_csv(df: pd.DataFrame, name: str):
