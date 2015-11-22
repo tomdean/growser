@@ -1,5 +1,5 @@
 import json
-import logging
+import logging.config
 
 from flask import Flask
 
@@ -17,3 +17,7 @@ with open(app.config.get('GOOGLE_CLIENT_KEY')) as fh:
 bigquery = BigQueryService(app.config.get('GOOGLE_PROJECT_ID'),
                            js['client_email'],
                            bytes(js['private_key'], 'UTF-8'))
+
+
+app.logger.name  # Need to call Flask log to initialize lazy property
+logging.config.fileConfig("logging.cfg")
