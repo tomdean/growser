@@ -1,0 +1,3 @@
+CREATE DATABASE growser;
+CREATE USER growser;
+GRANT ALL PRIVILEGES ON DATABASE growser TO growser;
