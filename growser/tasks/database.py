@@ -8,6 +8,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from sqlalchemy.schema import Index
 
 from growser.app import app
 from growser.models import db, Login, Rating, Repository, Recommendation, \
@@ -17,10 +18,8 @@ from growser.models import db, Login, Rating, Repository, Recommendation, \
 def initialize_database_schema():
     """Drop & recreate the database schema for SQLAlchemy-bound tables."""
     app.logger.info("Drop and recreate all model tables")
-
     db.drop_all()
     db.create_all()
-
     jobs = [
         BatchInsertCSV(Login.__table__, "data/csv/logins.csv"),
         BatchInsertCSV(Repository.__table__, "data/csv/repositories.csv"),
@@ -37,6 +36,12 @@ def initialize_database_schema():
     app.logger.info("Bulk inserting CSV files into tables")
     for job in jobs:
         job.execute(db.engine)
+
+    app.logger.info("Creating secondary indexes")
+    Index("IX_recommendation_model_repo", Recommendation.model_id,
+          Recommendation.repo_id, quote=False).create(db.engine)
+    Index("IX_rating_repo", Rating.repo_id, Rating.created_at, quote=False) \
+        .create(db.engine)
 
 
 def merge_repository_data_sources():
@@ -73,6 +78,8 @@ def merge_repository_data_sources():
 
 
 def __json_files_to_df(path: str) -> pd.DataFrame:
+    """Parse the JSON fetched from the GitHub API so that we have more data to
+    work with locally with repositories."""
     exists = {}
     files = glob.glob(path)
 
@@ -135,36 +142,23 @@ class BatchInsertCSV(object):
                 if not self.columns:
                     self.columns = header
 
-            # Hack for escaping strings without parameter binding
+            # Hack for escaping strings without parameter binding (psycopg2)
             conn = engine.raw_connection().connection
             func = conn.cursor().mogrify
-
-            def sanitize(val):
-                return func('%s', (val,)).decode('UTF-8')
+            self.escape_string = lambda val: func('%s', (val,)).decode('UTF-8')
 
             query = BatchInsert(self.table.name, self.columns)
-            for batch in self.next_batch(data, sanitize):
+            for batch in self.next_batch(data):
                 start = time()
                 query.execute(conn, batch)
                 app.logger.info("%s inserted (%s)", len(batch), time() - start)
 
-    def conversion_map(self, sanitize) -> dict:
-        """Map each column to a function for casting data prior to inserting."""
-        rv = {}
+    def escape_string(self, value: str) -> str:
+        raise NotImplementedError
 
-        def sanitize_str(val):
-            return sanitize(str(val))
-
-        for column in self.table.columns:
-            func = column.type.python_type
-            if func is datetime.datetime or func is str:
-                func = sanitize_str
-            rv[column.name] = func
-        return rv
-
-    def next_batch(self, data, sanitize=None) -> list:
+    def next_batch(self, data) -> list:
         """Yield batches of rows from the CSV file as a list of tuples"""
-        convert_to = self.conversion_map(sanitize)
+        convert_to = self.to_python_types()
 
         def to_tuple(rv):
             return tuple([convert_to[f](v) for f, v in zip(self.columns, rv)])
@@ -186,8 +180,21 @@ class BatchInsertCSV(object):
         """Extract the header from CSV and verify the columns exist."""
         for column in header:
             if self.table.columns.get(column) is None:
-                raise ValueError("%s is not a valid column", column)
+                raise ValueError("%s not found (%s)", column, self.table.name)
         return header
+
+    def to_python_types(self) -> dict:
+        """Map each column to a function for casting data prior to inserting."""
+        rv = {}
+
+        def to_str(val):
+            return self.escape_string(str(val))
+        for column in self.table.columns:
+            func = column.type.python_type
+            if func is datetime.datetime or func is str:
+                func = to_str
+            rv[column.name] = func
+        return rv
 
 
 class BatchInsert(object):
