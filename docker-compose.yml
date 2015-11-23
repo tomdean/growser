@@ -6,11 +6,11 @@ web:
   volumes:
     - /usr/src/app/static
   links:
-    - postgres:postgres
+    - postgres
   environment:
     - PYTHONPATH=/usr/src/app/
     - GROWSER_CONFIG=/usr/src/app/growser.cfg
-  command: gunicorn -b :8000 growser.web:app
+  command: gunicorn -w 4 -b :8000 growser.web:app
 
 nginx:
   restart: always
@@ -21,10 +21,9 @@ nginx:
   volumes_from:
     - web
   links:
-    - web:web
+    - web
 
 data:
-  restart: always
   build: ./deploy/postgres/
   volumes:
     - /var/lib/postgresql
