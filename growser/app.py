@@ -9,7 +9,7 @@ from growser.services.bigquery import BigQueryService
 app = Flask(__name__, template_folder="../templates", static_folder="../static")
 app.config.from_object('growser.config.BasicConfig')
 app.config.from_envvar('GROWSER_CONFIG', False)
-app.debug = True
+app.debug = False
 
 with open(app.config.get('GOOGLE_CLIENT_KEY')) as fh:
     js = json.loads(fh.read())
@@ -19,5 +19,5 @@ bigquery = BigQueryService(app.config.get('GOOGLE_PROJECT_ID'),
                            bytes(js['private_key'], 'UTF-8'))
 
 
-app.logger.name  # Need to call Flask log to initialize lazy property
+app.logger.name  # Need to initialize Flask logger before we can clobber it
 logging.config.fileConfig("logging.cfg")
