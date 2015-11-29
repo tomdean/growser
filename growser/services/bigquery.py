@@ -1,31 +1,11 @@
 from collections import Sized
 from itertools import chain
 
-from growser.services.google import bigquery, HttpError
+from growser.services.google import BaseJob, BigQueryService, HttpError
 
 
-class BigQueryService(object):
-    """Wrapper over google-api-client"""
-    def __init__(self, project_id: str, email: str, private_key: bytes):
-        self.project_id = project_id
-        self.api = bigquery(email, private_key)
-
-    @property
-    def jobs(self):
-        return self.api.jobs()
-
-    @property
-    def tables(self):
-        return self.api.tables()
-
-
-class BigQueryJob(object):
+class BigQueryJob(BaseJob):
     num_retries = 5
-
-    def __init__(self, service: BigQueryService):
-        self.service = service
-        self.project_id = self.service.project_id
-        self.id = ''
 
     @property
     def info(self):
@@ -44,7 +24,7 @@ class BigQueryJob(object):
         return self._call('insert', body=body)
 
     def _call(self, api: str, **kwargs):
-        method = getattr(self.service.jobs, api)
+        method = getattr(self.api.jobs, api)
         rv = method(projectId=self.project_id, **kwargs) \
             .execute(num_retries=self.num_retries)
         if 'jobReference' in rv:
@@ -74,7 +54,7 @@ class ExecuteAsyncQuery(BigQueryJob):
         return self.insert(body)
 
     def results(self):
-        return FetchQueryResults(self.service).run(self.id)
+        return FetchQueryResults(self.api).run(self.id)
 
 
 class FetchQueryResults(BigQueryJob):
@@ -98,7 +78,7 @@ class FetchQueryResults(BigQueryJob):
 class DeleteTable(BigQueryJob):
     def run(self, table: str):
         try:
-            self.service.tables.delete(
+            self.api.tables.delete(
                 **_table(self.project_id, table)).execute()
         except HttpError:
             return False
@@ -113,7 +93,7 @@ class DeleteTable(BigQueryJob):
 class PersistQueryToTable(BigQueryJob):
     """Execute a query and save the results to a table."""
     def run(self, query: str, destination: str):
-        DeleteTable(self.service).run(destination)
+        DeleteTable(self.api).run(destination)
         body = {
             'configuration': {
                 'query': {

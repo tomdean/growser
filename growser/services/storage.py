@@ -3,26 +3,7 @@ import os
 
 from apiclient.http import MediaIoBaseDownload
 
-from growser.services.google import storage, HttpError
-
-
-class CloudStorageService(object):
-    def __init__(self, project_id, account_name, private_key):
-        self.project_id = project_id
-        self.api = storage(account_name, private_key)
-
-    @property
-    def objects(self):
-        return self.api.objects()
-
-    @property
-    def buckets(self):
-        return self.api.buckets()
-
-
-class BaseJob(object):
-    def __init__(self, api):
-        self.api = api
+from growser.services.google import BaseJob, HttpError
 
 
 class DownloadFile(BaseJob):
