@@ -3,7 +3,7 @@ import datetime
 import glob
 import gzip
 import json
-from time import time
+import time
 import os
 
 import numpy as np
@@ -16,18 +16,19 @@ from growser.models import db, Login, Rating, Repository, Recommendation, \
 
 
 def initialize_database_schema():
-    """Drop & recreate the database schema for SQLAlchemy-bound tables."""
+    """Drop, recreate, and repopulate the SQL database."""
     app.logger.info("Drop and recreate all model tables")
     db.drop_all()
     db.create_all()
-    jobs = [
-        BatchInsertCSV(Login.__table__, "data/csv/logins.csv"),
-        BatchInsertCSV(Repository.__table__, "data/csv/repositories.csv"),
-        BatchInsertCSV(Rating.__table__, "data/csv/ratings.datetime.csv"),
-        BatchInsertCSV(RecommendationModel.__table__,
-                       "data/recommendations/models.csv")
-    ]
 
+    # Data from GitHub Archive & static data
+    jobs = [BatchInsertCSV(Login.__table__, "data/csv/logins.csv"),
+            BatchInsertCSV(Repository.__table__, "data/csv/repositories.csv"),
+            BatchInsertCSV(Rating.__table__, "data/csv/ratings.datetime.csv"),
+            BatchInsertCSV(RecommendationModel.__table__,
+                           "data/recommendations/models.csv")]
+
+    # Recommendations
     columns = ['model_id', 'repo_id', 'recommended_repo_id', 'score']
     for recs in glob.glob('data/recommendations/*/*.gz'):
         jobs.append(BatchInsertCSV(Recommendation.__table__,
@@ -53,7 +54,7 @@ def merge_repository_data_sources():
     df1 = df1[df1['owner'] != ''].copy()
 
     # GitHub API data
-    df2 = __json_files_to_df("data/github-api/*.json.gz")
+    df2 = get_github_api_results("data/github-api/*.json.gz")
     df2['created_at_alt'] = pd.to_datetime(df2['created_at_alt'])
     df2['updated_at'] = pd.to_datetime(df2['updated_at'], unit='s')
 
@@ -77,9 +78,9 @@ def merge_repository_data_sources():
     df[fields].to_csv("data/csv/repositories.csv", index=False)
 
 
-def __json_files_to_df(path: str) -> pd.DataFrame:
+def get_github_api_results(path: str) -> pd.DataFrame:
     """Parse the JSON fetched from the GitHub API so that we have more data to
-    work with locally with repositories."""
+    work with locally."""
     exists = {}
     files = glob.glob(path)
 
@@ -90,6 +91,7 @@ def __json_files_to_df(path: str) -> pd.DataFrame:
     app.logger.info("Processing {} JSON files".format(len(files)))
     for filename in files:
         content = json.loads(gzip.open(filename).read().decode("UTF-8"))
+        # Not found or rate limit error edge case
         if 'owner' not in content or content['full_name'] in exists:
             continue
         exists[content['full_name']] = True
@@ -149,9 +151,10 @@ class BatchInsertCSV(object):
 
             query = BatchInsert(self.table.name, self.columns)
             for batch in self.next_batch(data):
-                start = time()
+                start = time.time()
                 query.execute(conn, batch)
-                app.logger.info("%s inserted (%s)", len(batch), time() - start)
+                app.logger.info("%s rows inserted in %s seconds",
+                                len(batch), time.time() - start)
 
     def escape_string(self, value: str) -> str:
         raise NotImplementedError
@@ -184,7 +187,8 @@ class BatchInsertCSV(object):
         return header
 
     def to_python_types(self) -> dict:
-        """Map each column to a function for casting data prior to inserting."""
+        """Return a dictionary of (column -> func) for casting values before
+        being used in a SQL statement."""
         rv = {}
 
         def to_str(val):
@@ -198,6 +202,7 @@ class BatchInsertCSV(object):
 
 
 class BatchInsert(object):
+    """Build a multi-valued INSERT statement."""
     def __init__(self, table: str, columns: list):
         self.table = table
         self.columns = columns
@@ -205,6 +210,7 @@ class BatchInsert(object):
                 table, ", ".join(columns))
 
     def execute(self, conn, values: list):
+        start = time.time()
         values = ["({})".format(",".join(map(str, value))) for value in values]
         cursor = conn.cursor()
         cursor.execute(self.query + ", ".join(values))

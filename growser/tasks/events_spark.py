@@ -3,7 +3,6 @@ from pyspark.serializers import MarshalSerializer
 from pyspark.sql import HiveContext
 from pyspark.sql.types import StringType, IntegerType, StructType, StructField
 
-
 conf = SparkConf() \
     .setAppName("Process GitHub Events") \
     .setMaster("local[8]")
@@ -18,12 +17,12 @@ def convert_row(row):
     return (row[3], row[2]), (int(row[0]), int(int(row[4])/1000000), 1)
 
 
-def save(df: pd.DataFrame, path: str):
+def save(df, path: str):
     df.write.format('com.databricks.spark.csv') \
         .options(header="true").save(path)
 
 
-def process_events_dataframes(path):
+def process_events_dataframes(path: str):
     """Process the Github Archive logs using Apache Spark & DataFrames."""
     rdd = sc.textFile(path) \
         .map(lambda x: x.split(",")) \

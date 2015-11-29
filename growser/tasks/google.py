@@ -10,7 +10,7 @@ from growser.services.storage import DownloadFile, DeleteFile, \
 
 
 class BlockingJobPipeline(object):
-    """Run two or more jobs in serial order."""
+    """Run a list of jobs in order."""
     def __init__(self, service, block_duration: int=5):
         self.service = service
         self.block_duration = block_duration
