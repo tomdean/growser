@@ -3,7 +3,8 @@ import datetime
 import pandas as pd
 from sqlalchemy import func
 
-from growser.models import db, Rating, Repository
+from growser.app import db
+from growser.models import Rating, Repository
 
 
 def daily_events_by_repo(repo_id):

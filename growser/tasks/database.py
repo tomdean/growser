@@ -10,8 +10,8 @@ import numpy as np
 import pandas as pd
 from sqlalchemy.schema import Index
 
-from growser.app import app
-from growser.models import db, Login, Rating, Repository, Recommendation, \
+from growser.app import app, db
+from growser.models import Login, Rating, Repository, Recommendation, \
     RecommendationModel
 
 

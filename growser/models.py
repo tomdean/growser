@@ -1,12 +1,8 @@
-from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
 from sqlalchemy import Column, Date, DateTime, Float, Integer, SmallInteger, \
     String
 
-from growser.app import app
-
-
-db = SQLAlchemy(app)
+from growser.app import db
 
 
 class Repository(db.Model):

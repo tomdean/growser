@@ -6,9 +6,9 @@ import os
 
 from sqlalchemy import func
 
-from growser.app import app
+from growser.app import app, db
 from growser.services import github
-from growser.models import db, Rating, Repository
+from growser.models import Rating, Repository
 
 
 def get_rate_limit():
