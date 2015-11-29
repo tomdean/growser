@@ -1,6 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import relationship
-from sqlalchemy import Column, DateTime, Float, Integer, SmallInteger, String
+from sqlalchemy import Column, Date, DateTime, Float, Integer, SmallInteger, \
+    String
 
 from growser.app import app
 
@@ -63,3 +64,25 @@ class Recommendation(db.Model):
         self.recommended_repo_id = recommended_repo_id
         self.model_id = model_id
         self.score = score
+
+
+class Ranking(object):
+    date = Column(Date, nullable=False, primary_key=True)
+    repo_id = Column(Integer, nullable=False, primary_key=True)
+    rank = Column(Integer, nullable=False)
+
+
+class WeeklyRanking(Ranking, db.Model):
+    pass
+
+
+class MonthlyRanking(Ranking, db.Model):
+    pass
+
+
+class WeeklyRankingByLanguage(Ranking, db.Model):
+    language = Column(String(32), nullable=False, primary_key=True)
+
+
+class MonthlyRankingByLanguage(Ranking, db.Model):
+    language = Column(String(32), nullable=False, primary_key=True)
