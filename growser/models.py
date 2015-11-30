@@ -66,6 +66,7 @@ class Ranking(object):
     date = Column(Date, nullable=False, primary_key=True)
     repo_id = Column(Integer, nullable=False, primary_key=True)
     rank = Column(Integer, nullable=False)
+    num_events = Column(Integer, nullable=False)
 
 
 class WeeklyRanking(Ranking, db.Model):
