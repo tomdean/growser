@@ -1,3 +1,5 @@
 CREATE DATABASE growser;
 CREATE USER growser;
 GRANT ALL PRIVILEGES ON DATABASE growser TO growser;
+CREATE EXTENSION pg_prewarm;
+CREATE EXTENSION pg_buffercache;

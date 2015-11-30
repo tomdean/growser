@@ -25,3 +25,5 @@ class BasicConfig(DefaultConfig):
 
     # Database URL
     SQLALCHEMY_DATABASE_URI = "postgresql://user:pass@host:5432/growser"
+
+    SQLALCHEMY_POOL_SIZE = 20
