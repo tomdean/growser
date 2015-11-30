@@ -26,16 +26,17 @@ def process_events(path="data/events/events_*.gz"):
     events = _get_events_dataframe(path)
 
     # Find all logins & repos and assign them unique IDs
+    app.logger.info("Finding unique repositories & logins")
     repositories = _unique_values(events, 'repo', 'login')
     logins = _unique_values(events, 'login', 'repo')
 
     # Filter logins & repos to prune outliers and items with too little activity
+    app.logger.info("Filter events to repos & logins with min # of events")
     min_repos = repositories[repositories['num_unique'] >= MIN_REPO_EVENTS]
     min_logins = logins[(logins['num_unique'] >= MIN_LOGIN_EVENTS) &
                         (logins['num_unique'] <= MAX_LOGIN_EVENTS)]
 
     # Update events to use numeric repo/login IDs
-    app.logger.info("Filter events to repos & logins with min # of events")
     fields = ['type', 'repo_id', 'login_id', 'created_at_x']
     events = pd.merge(events, min_repos, on='repo')
     events = pd.merge(events, min_logins, on='login')[fields] \
@@ -112,4 +113,5 @@ def _get_events_dataframe(path: str) -> pd.DataFrame:
         df['repo'] = df['to'].fillna(df['repo'])
         df.drop(['to'], axis=1, inplace=True)
         rv.append(df)
+    app.logger.debug("Concatenating DataFrames")
     return pd.concat(rv)
