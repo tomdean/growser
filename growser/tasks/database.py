@@ -7,14 +7,16 @@ import time
 
 import numpy as np
 import pandas as pd
-from sqlalchemy.schema import Index, DropIndex
+from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.schema import Index
 
 from growser.app import app, db
-from growser.models import Login, Rating, Repository, Recommendation, \
-    RecommendationModel, WeeklyRanking, MonthlyRanking
+from growser.models import Login, MonthlyRanking, MonthlyRankingByLanguage, \
+    Rating, Repository, Recommendation, RecommendationModel, WeeklyRanking, \
+    WeeklyRankingByLanguage
 
 
-BATCH_SIZE = 25000
+BATCH_SIZE = 50000
 
 
 def initialize_database_schema():
@@ -47,17 +49,33 @@ def create_indexes():
     app.logger.info("Creating secondary indexes")
 
     def create(name, *args):
-        DropIndex(name).execute(db.engine)
-        Index(name, *args, quote=False).create(db.engine)
+        app.logger.debug("Creating %s", name)
+        index = Index(name, *args, quote=False)
+        try:
+            index.drop(db.engine)
+        except ProgrammingError:
+            pass
+        index.create(db.engine)
 
+    create("IX_repository_language", Repository.language)
     create("IX_rating_repo", Rating.repo_id, Rating.created_at)
     create("IX_rating_created_at", Rating.created_at, Rating.repo_id)
     create("IX_recommendation_model_repo",
            Recommendation.model_id, Recommendation.repo_id)
-    create("IX_weekly_ranking_repo",
-           WeeklyRanking.repo_id, WeeklyRanking.date)
-    create("IX_monthly_ranking_repo",
-           MonthlyRanking.repo_id, MonthlyRanking.date)
+
+    def ranking_index(name, model):
+        create(name, model.repo_id, model.date)
+
+    ranking_index("IX_weekly_ranking_repo", WeeklyRanking)
+    ranking_index("IX_weekly_ranking_by_lang_repo", WeeklyRankingByLanguage)
+    ranking_index("IX_monthly_ranking_repo", MonthlyRanking)
+    ranking_index("IX_monthly_ranking_by_lang_repo", MonthlyRankingByLanguage)
+
+
+def pre_warm_tables():
+    """Pre-warm tables to improve cold start performance."""
+    for table in db.metadata.tables:
+        db.engine.execute("SELECT pg_prewarm(%s)", table)
 
 
 def merge_repository_data_sources():
@@ -136,6 +154,8 @@ class BulkInsertList(object):
                         their respective database columns.
         :param batch_size: Number of rows to insert per SQL statement.
         """
+        if hasattr(table, '__table__'):
+            table = table.__table__
         self.table = table
         self.columns = columns or []
         self.batch_size = batch_size
@@ -147,7 +167,7 @@ class BulkInsertList(object):
         :param engine: A :class:`sqlalchemy.engine.base.Engine` instance.
         """
         if not self.columns:
-            raise AttributeError("columns cannot be empty")
+            raise ValueError("Columns cannot be empty")
 
         # Hack for escaping strings without parameter binding (psycopg2). Gross.
         conn = engine.raw_connection()
@@ -160,10 +180,13 @@ class BulkInsertList(object):
         for batch in self.next_batch():
             start = time.time()
             total += query.execute(conn, batch)
-            app.logger.debug("%s rows inserted in %s seconds (%s total)",
-                             len(batch), round(time.time() - start, 4), total)
-        app.logger.debug("Copied %s rows in %s seconds",
-                         total, round(time.time() - first_start, 2))
+            app.logger.debug(
+                "%s rows inserted in %s seconds (%s total)",
+                len(batch), round(time.time() - start, 4), total
+            )
+
+        app.logger.info("Copied %s rows in %s seconds",
+                        total, round(time.time() - first_start, 2))
 
     def next_batch(self) -> list:
         """Yield batches of rows from the CSV file as a list of tuples."""
@@ -213,13 +236,13 @@ class BulkInsertCSV(BulkInsertList):
         self.header = header
 
     def open_csv(self):
-        """Return an open file handle for the CSV file."""
+        """Return an open stream for the CSV file."""
         if self.filename.endswith('gz'):
             return gzip.open(self.filename, 'rt')
         return open(self.filename, 'rt')
 
     def execute(self, engine):
-        app.logger.debug("Copying %s into %s", self.filename, self.table.name)
+        app.logger.info("Copying %s into %s", self.filename, self.table.name)
         with self.open_csv() as data:
             data = csv.reader(data)
             if self.header:

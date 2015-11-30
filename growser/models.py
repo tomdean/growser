@@ -62,24 +62,37 @@ class Recommendation(db.Model):
         self.score = score
 
 
-class Ranking(object):
+class BaseRanking(object):
     date = Column(Date, nullable=False, primary_key=True)
     repo_id = Column(Integer, nullable=False, primary_key=True)
     rank = Column(Integer, nullable=False)
     num_events = Column(Integer, nullable=False)
 
 
-class WeeklyRanking(Ranking, db.Model):
+class WeeklyRanking(BaseRanking, db.Model):
     pass
 
 
-class MonthlyRanking(Ranking, db.Model):
+class MonthlyRanking(BaseRanking, db.Model):
     pass
 
 
-class WeeklyRankingByLanguage(Ranking, db.Model):
+class WeeklyRankingByLanguage(BaseRanking, db.Model):
     language = Column(String(32), nullable=False, primary_key=True)
 
 
-class MonthlyRankingByLanguage(Ranking, db.Model):
+class MonthlyRankingByLanguage(BaseRanking, db.Model):
     language = Column(String(32), nullable=False, primary_key=True)
+
+
+class AllTimeRanking(db.Model):
+    repo_id = Column(Integer, nullable=False, primary_key=True)
+    rank = Column(Integer, nullable=False)
+    num_events = Column(Integer, nullable=False)
+
+
+class AllTimeRankingByLanguage(db.Model):
+    repo_id = Column(Integer, nullable=False, primary_key=True)
+    language = Column(String(32), nullable=False, primary_key=True)
+    rank = Column(Integer, nullable=False)
+    num_events = Column(Integer, nullable=False)

@@ -3,3 +3,4 @@ CREATE USER growser;
 GRANT ALL PRIVILEGES ON DATABASE growser TO growser;
 CREATE EXTENSION pg_prewarm;
 CREATE EXTENSION pg_buffercache;
+CREATE EXTENSION pg_stat_statements;

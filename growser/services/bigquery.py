@@ -1,7 +1,7 @@
 from collections import Sized
 from itertools import chain
 
-from growser.services.google import BaseJob, BigQueryService, HttpError
+from growser.services.google import BaseJob, HttpError
 
 
 class BigQueryJob(BaseJob):
