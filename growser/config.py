@@ -21,7 +21,7 @@ class BasicConfig(DefaultConfig):
     GOOGLE_PROJECT_ID = ""
 
     #: Path to the JSON key exported from Google Console API credentials
-    GOOGLE_CLIENT_KEY = "/Users/tom/Projects/growser/client_key.json"
+    GOOGLE_CLIENT_KEY = "client_key.json"
 
     #: Database URL
     SQLALCHEMY_DATABASE_URI = "postgresql://user:pass@host:5432/growser"
