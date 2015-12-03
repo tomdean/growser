@@ -1,6 +1,7 @@
 from sqlalchemy.orm import relationship
 from sqlalchemy import Column, Date, DateTime, Float, Integer, SmallInteger, \
     String
+from sqlalchemy.ext.declarative import declared_attr
 
 from growser.app import db
 
@@ -62,37 +63,49 @@ class Recommendation(db.Model):
         self.score = score
 
 
-class BaseRanking(object):
+class _BaseRanking(object):
+    repo_id = Column(Integer, nullable=False, primary_key=True)
+    rank = Column(Integer, nullable=False)
+    num_events = Column(Integer, nullable=False)
+
+    @declared_attr
+    def repository(self):
+        return relationship(
+            Repository,
+            foreign_keys=Repository.repo_id,
+            primaryjoin=Repository.repo_id == self.repo_id,
+            uselist=False,
+            lazy="joined"
+        )
+
+
+class _DateRanking(_BaseRanking):
     date = Column(Date, nullable=False, primary_key=True)
-    repo_id = Column(Integer, nullable=False, primary_key=True)
-    rank = Column(Integer, nullable=False)
-    num_events = Column(Integer, nullable=False)
 
 
-class WeeklyRanking(BaseRanking, db.Model):
+class _LanguageRanking(object):
+    language = Column(String(32), nullable=False, primary_key=True)
+
+
+class WeeklyRanking(_DateRanking, db.Model):
     pass
 
 
-class MonthlyRanking(BaseRanking, db.Model):
+class MonthlyRanking(_DateRanking, db.Model):
     pass
 
 
-class WeeklyRankingByLanguage(BaseRanking, db.Model):
-    language = Column(String(32), nullable=False, primary_key=True)
+class WeeklyRankingByLanguage(_DateRanking, _LanguageRanking, db.Model):
+    pass
 
 
-class MonthlyRankingByLanguage(BaseRanking, db.Model):
-    language = Column(String(32), nullable=False, primary_key=True)
+class MonthlyRankingByLanguage(_DateRanking, _LanguageRanking, db.Model):
+    pass
 
 
-class AllTimeRanking(db.Model):
-    repo_id = Column(Integer, nullable=False, primary_key=True)
-    rank = Column(Integer, nullable=False)
-    num_events = Column(Integer, nullable=False)
+class AllTimeRanking(_BaseRanking, db.Model):
+    pass
 
 
-class AllTimeRankingByLanguage(db.Model):
-    repo_id = Column(Integer, nullable=False, primary_key=True)
-    language = Column(String(32), nullable=False, primary_key=True)
-    rank = Column(Integer, nullable=False)
-    num_events = Column(Integer, nullable=False)
+class AllTimeRankingByLanguage(_BaseRanking, _LanguageRanking, db.Model):
+    pass
