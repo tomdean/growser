@@ -37,3 +37,16 @@ postgres:
     - data
   ports:
     - "5432:5432"
+
+celery:
+  build: ./
+  links:
+    - postgres
+    - redis
+
+redis:
+  build: ./deploy/redis/
+  expose:
+    - "6379"
+  ports:
+    - "6379:6379"

@@ -4,21 +4,18 @@ import pandas as pd
 
 from growser.app import app
 
+#: Minimum number of stars & forks a repository needs to be included
+MIN_REPO_EVENTS = 25
 
-MIN_REPO_EVENTS = 75
-MIN_LOGIN_EVENTS = 25
+#: Minimum number of events a user must have before including them
+MIN_LOGIN_EVENTS = 10
+
+#: Some users don't have refined taste. Also bots.
 MAX_LOGIN_EVENTS = 1000
 
 
-def process_events(path="data/events/events_*.gz"):
+def process_events(path: str="data/events/events_*.gz"):
     """Process the entirety of the Github-Archive files.
-
-    1. Assign unique IDs to logins & repositories
-        a. Replace values for renamed repositories (e.g. node)
-    2. De-duplicate events by user/repo/type
-    3. De-duplicate events by user/repo
-        a. Star=1, Forked=2, Star+Forked=3
-    4. Save to CSV
 
     :param path: Location of the gzip archives
     """
@@ -32,14 +29,15 @@ def process_events(path="data/events/events_*.gz"):
 
     # Filter logins & repos to prune outliers and items with too little activity
     app.logger.info("Filter events to repos & logins with min # of events")
-    min_repos = repositories[repositories['num_unique'] >= MIN_REPO_EVENTS]
-    min_logins = logins[(logins['num_unique'] >= MIN_LOGIN_EVENTS) &
-                        (logins['num_unique'] <= MAX_LOGIN_EVENTS)]
+    min_repo = repositories[repositories['num_unique'] >= MIN_REPO_EVENTS]
+    min_login = logins[(logins['num_unique'] >= MIN_LOGIN_EVENTS) &
+                     (logins['num_unique'] <= MAX_LOGIN_EVENTS)]
 
     # Update events to use numeric repo/login IDs
+    app.logger.info("Joining events to repos & logins")
     fields = ['type', 'repo_id', 'login_id', 'created_at_x']
-    events = pd.merge(events, min_repos, on='repo')
-    events = pd.merge(events, min_logins, on='login')[fields] \
+    events = pd.merge(events, min_repo, on='repo')
+    events = pd.merge(events, min_login, on='login')[fields] \
         .rename(columns={'created_at_x': 'created_at'})
 
     # Eliminate dupes by grouping by type
@@ -113,5 +111,5 @@ def _get_events_dataframe(path: str) -> pd.DataFrame:
         df['repo'] = df['to'].fillna(df['repo'])
         df.drop(['to'], axis=1, inplace=True)
         rv.append(df)
-    app.logger.debug("Concatenating DataFrames")
+    app.logger.info("Concatenating DataFrames")
     return pd.concat(rv)

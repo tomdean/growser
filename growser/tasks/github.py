@@ -6,9 +6,49 @@ import os
 
 from sqlalchemy import func
 
-from growser.app import app, db
+from growser.app import app, celery, db
 from growser.services import github
 from growser.models import Rating, Repository
+
+
+def update_repositories(repos: list, age: int=86400*14):
+    """Call the API for the given repositories, saving the results to disk."""
+    for idx, repo in enumerate(repos):
+        update_repository.delay(repo, age)
+
+
+@celery.task
+def update_popular_repositories(limit: int=25000):
+    """Update local data for repositories sorted by most stars & forks."""
+    top = Repository.query.order_by(Repository.num_unique.desc()).limit(limit)
+    update_repositories(top.all())
+
+
+@celery.task
+def update_recently_popular_repositories(prior_days=14, limit: int=500):
+    """Update local data for most recently popular repositories."""
+    created_at = datetime.date.today() - datetime.timedelta(days=prior_days)
+    top = db.session.query(Rating.repo_id) \
+        .filter(Rating.created_at >= created_at) \
+        .group_by(Rating.repo_id) \
+        .order_by(func.COUNT(Rating.repo_id).desc()) \
+        .limit(limit)
+    repos = Repository.query.filter(Repository.repo_id.in_(top))
+    update_repositories(repos.all())
+
+
+@celery.task
+def update_repository(repo, age: int):
+    filename = "data/github-api/{}.json.gz".format(repo.repo_id)
+    if os.path.exists(filename):
+        stats = os.path.getctime(filename)
+        if age > time.time() - stats:
+            return False
+    app.logger.debug("Fetching {}".format(repo.name))
+    content = get_with_retry(*repo.name.split("/"))
+    with gzip.open(filename, "wb") as gz:
+        gz.write(content)
+    return True
 
 
 def get_rate_limit():
@@ -28,37 +68,3 @@ def get_with_retry(user: str, name: str) -> str:
         time.sleep(reset)
         rv = get_with_retry(user, name)
     return rv
-
-
-def update_repositories(repos: list, age: int=86400*14):
-    """Call the API for the given repositories, saving the results to disk.
-
-    Defaults to caching requests for 14 days."""
-    for idx, repo in enumerate(repos):
-        filename = "data/github-api/{}.json.gz".format(repo.repo_id)
-        if os.path.exists(filename):
-            stats = os.path.getctime(filename)
-            if age > time.time() - stats:
-                continue
-        app.logger.debug("Fetching {} ({})".format(repo.name, idx))
-        content = get_with_retry(*repo.name.split("/"))
-        with gzip.open(filename, "wb") as gz:
-            gz.write(content)
-
-
-def update_popular_repositories(limit: int=25000):
-    """Update local data for repositories sorted by most stars & forks."""
-    top = Repository.query.order_by(Repository.num_unique.desc()).limit(limit)
-    update_repositories(top.all())
-
-
-def update_recently_popular_repositories(prior_days=7, limit: int=500):
-    """Update local data for most recently popular repositories."""
-    count = func.COUNT(Rating.repo_id)
-    created_at = datetime.date.today() - datetime.timedelta(days=prior_days)
-    top = db.session.query(Rating.repo_id, count.label("num_events")) \
-        .filter(Rating.created_at >= created_at) \
-        .group_by(Rating.repo_id) \
-        .order_by(count.desc()) \
-        .limit(limit)
-    update_repositories(top.all())

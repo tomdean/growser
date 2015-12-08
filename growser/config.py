@@ -1,9 +1,17 @@
 class DefaultConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    #: Modules that Celery will use for finding tasks
+    CELERY_INCLUDE = (
+        'growser.tasks.github',
+        'growser.tasks.rankings',
+    )
+
 
 class BasicConfig(DefaultConfig):
     """The configuration required to run Growser"""
+    #: Enable debugging including logging, toolbar etc.
+    DEBUG = True
 
     #: GitHub username & personal access token
     GITHUB_OAUTH = ('', '')
@@ -26,4 +34,11 @@ class BasicConfig(DefaultConfig):
     #: Database URL
     SQLALCHEMY_DATABASE_URI = "postgresql://user:pass@host:5432/growser"
 
+    #: SQLAlchemy connection pool
     SQLALCHEMY_POOL_SIZE = 20
+
+    #: Celery Broker
+    BROKER_URL = ""
+
+    #: Celery backend for persisting task results
+    CELERY_BACKEND = ""

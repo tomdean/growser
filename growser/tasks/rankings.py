@@ -6,7 +6,7 @@ import pandas as pd
 from sqlalchemy import func
 from sqlalchemy.sql import delete
 
-from growser.app import app, db
+from growser.app import app, celery, db
 from growser.models import AllTimeRanking, AllTimeRankingByLanguage, \
     MonthlyRanking, MonthlyRankingByLanguage, Rating, Repository, \
     WeeklyRanking, WeeklyRankingByLanguage
@@ -19,6 +19,7 @@ INITIAL_DATE = date(2012, 4, 1)
 RANK_TOP_N = 1000
 
 
+@celery.task(ignore_result=True)
 def update_alltime_rankings():
     """Update all-time rankings."""
     query = get_top_repositories().limit(RANK_TOP_N).all()
@@ -31,8 +32,12 @@ def update_alltime_rankings():
     batch.execute(db.engine)
 
 
+@celery.task(ignore_result=True)
 def update_alltime_language_rankings(language: str):
-    """Update all-time rankings for a single language."""
+    """Update all-time rankings for a single language.
+
+    .. seealso:: :func:`update_all_alltime_language_rankings`
+    """
     app.logger.info("Updating all-time rankings for %s", language)
     query = get_top_repositories() \
         .join(Repository, Repository.repo_id == Rating.repo_id) \
@@ -42,7 +47,7 @@ def update_alltime_language_rankings(language: str):
     repos = map(lambda x: (language,) + x, query.all())
     ranked = rank_repositories(list(repos), 2)
 
-    AllTimeRanking.query.filter(
+    AllTimeRankingByLanguage.query.filter(
         AllTimeRankingByLanguage.language == language).delete()
 
     columns = ["language", "repo_id", "num_events", "rank"]
@@ -50,6 +55,7 @@ def update_alltime_language_rankings(language: str):
     batch.execute(db.engine)
 
 
+@celery.task(ignore_result=True)
 def update_weekly_rankings(start_date: date):
     """Update rankings for the week beginning on `start_date`."""
     start_date = to_first_day_of_week(start_date)
@@ -57,6 +63,7 @@ def update_weekly_rankings(start_date: date):
     _update_rankings(WeeklyRanking.__table__, start_date, end_date)
 
 
+@celery.task(ignore_result=True)
 def update_monthly_rankings(start_date: date):
     """Update rankings for the month of `start_date`."""
     start_date = start_date.replace(day=1)
@@ -65,6 +72,7 @@ def update_monthly_rankings(start_date: date):
     _update_rankings(MonthlyRanking.__table__, start_date, end_date)
 
 
+@celery.task(ignore_result=True)
 def update_weekly_language_rankings(language: str, start_date: date):
     """Update language rankings for the week beginning on `start_date`."""
     start_date = to_first_day_of_week(start_date)
@@ -73,6 +81,7 @@ def update_weekly_language_rankings(language: str, start_date: date):
                               language, start_date, end_date)
 
 
+@celery.task(ignore_result=True)
 def update_monthly_language_rankings(language: str, start_date: date):
     """Update language rankings for the month of `start_date`."""
     start_date = start_date.replace(day=1)
@@ -82,39 +91,41 @@ def update_monthly_language_rankings(language: str, start_date: date):
                               language, start_date, end_date)
 
 
+@celery.task
 def update_all_alltime_language_rankings():
-    """Update the All-Time Rankings for ALL languages."""
-    languages = get_top_languages()
-    for language in languages:
-        update_alltime_language_rankings(language)
+    """Update All-Time Rankings for all languages."""
+    for language in get_top_languages():
+        update_alltime_language_rankings.delay(language)
 
 
+@celery.task
 def update_all_weekly_rankings():
     """Update all weekly rankings we have data for."""
     for week in weekly_interval(INITIAL_DATE, date.today()):
-        update_weekly_rankings(week)
+        update_weekly_rankings.delay(week)
 
 
+@celery.task
 def update_all_weekly_language_rankings():
     """Update weekly rankings for all languages and weeks."""
-    languages = get_top_languages()
-    for language in languages:
+    for language in get_top_languages():
         for week in weekly_interval(INITIAL_DATE, date.today()):
-            update_weekly_language_rankings(language, week)
+            update_weekly_language_rankings.delay(language, week)
 
 
+@celery.task
 def update_all_monthly_rankings():
     """Update all monthly rankings we have data for."""
     for month in monthly_interval(INITIAL_DATE, date.today()):
-        update_monthly_rankings(month)
+        update_monthly_rankings.delay(month)
 
 
+@celery.task
 def update_all_monthly_language_rankings():
     """Update monthly rankings for all languages and months."""
-    languages = get_top_languages()
-    for language in languages:
+    for language in get_top_languages():
         for month in monthly_interval(INITIAL_DATE, date.today()):
-            update_monthly_language_rankings(language, month)
+            update_monthly_language_rankings.delay(language, month)
 
 
 def _update_rankings(table, start_date: date, end_date: date):

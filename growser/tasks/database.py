@@ -20,11 +20,14 @@ BATCH_SIZE = 50000
 
 
 def initialize_database_schema():
-    """Drop, recreate, and repopulate the SQL database."""
+    """Drop & recreate the SQL schema."""
     app.logger.info("Drop and recreate all model tables")
     db.drop_all()
     db.create_all()
 
+
+def populate_database_from_csv_sources():
+    """Populate the initial database from previously generated CSV sources."""
     # Data from GitHub Archive & static data
     jobs = [BulkInsertCSV(Login.__table__, "data/csv/logins.csv"),
             BulkInsertCSV(Repository.__table__, "data/csv/repositories.csv"),
@@ -33,15 +36,14 @@ def initialize_database_schema():
 
     # Recommendations
     columns = ['model_id', 'repo_id', 'recommended_repo_id', 'score']
-    for recs in glob.glob('data/recommendations/*/*.gz'):
+    for filename in glob.glob('data/recommendations/*/*.gz'):
         jobs.append(BulkInsertCSV(Recommendation.__table__,
-                                  recs, header=False, columns=columns))
+                                  filename, header=False, columns=columns))
 
     app.logger.info("Bulk inserting CSV files into tables")
     for job in jobs:
+        app.logger.info("Running %s", job)
         job.execute(db.engine)
-
-    create_indexes()
 
 
 def create_indexes():
@@ -120,6 +122,13 @@ def get_github_api_results(path: str) -> pd.DataFrame:
     def to_org(r):
         return r['organization']['login'] if 'organization' in r else ''
 
+    def homepage(url):
+        if not url:
+            return None
+        if 'http' not in url:
+            return 'http://' + url
+        return url
+
     rv = []
     app.logger.info("Processing {} JSON files".format(len(files)))
     for filename in files:
@@ -130,6 +139,7 @@ def get_github_api_results(path: str) -> pd.DataFrame:
         exists[content['full_name']] = True
         rv.append({
             'name': content['full_name'],
+            'homepage': homepage(content['homepage'].strip()),
             'organization': to_org(content),
             'language': content['language'],
             'description': (content['description'] or "").replace("\n", ""),
@@ -204,8 +214,7 @@ class BulkInsertList(object):
         yield batch
 
     def to_python_types(self) -> dict:
-        """Return a dictionary of (column -> func) for casting values for use in
-        a SQL statement."""
+        """Return a dict (name -> func) for casting values in SQL statements."""
         rv = {}
 
         def to_str(val):
@@ -257,6 +266,10 @@ class BulkInsertCSV(BulkInsertList):
                 raise ValueError("%s not found (%s)", column, self.table.name)
         if not self.columns:
             self.columns = header
+
+    def __repr__(self):
+        return "{}(table={}, filename={})".format(
+                self.__class__, self.table, self.filename)
 
 
 class BulkInsertQuery(object):
