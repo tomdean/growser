@@ -7,6 +7,14 @@
 <title>{% block title %}Growser{% endblock %}</title>
 <link href="/static/bootstrap/css/bootstrap.min.css" rel="stylesheet">
 <link href="/static/octicons/octicons.css" rel="stylesheet" >
+<style>
+#subheader { padding: 0; margin-top: -20px; border-bottom: 1px solid #ddd; }
+#menu { margin-top: 16px; margin-bottom: -1px; }
+.nav-tabs > li.active > a, .nav-tabs > li.active > a:hover { border-top: 3px solid #d26911; }
+.nav-tabs > li > a:hover { border-bottom: 0; }
+.pagination { margin: 0; }
+.pager { margin: 0; }
+</style>
 </head>
 <body>
 
@@ -23,7 +31,8 @@
     </div>
     <div id="navbar" class="navbar-collapse collapse">
       <ul class="nav navbar-nav">
-        <li class="active"><a href="/l/">Languages</a></li>
+        <li class="active"><a href="{{ url_for('browse') }}">Browse</a></li>
+        <li><a href="/t/">Trending</a></li>
         <li><a href="/o/">Organizations</a></li>
       </ul>
     </div>

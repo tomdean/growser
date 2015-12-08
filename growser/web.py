@@ -1,11 +1,17 @@
-import json
+from datetime import date, timedelta
 
-from flask import jsonify, render_template
+from flask import abort, render_template, request
+import pandas as pd
 
 from growser import reports
+from growser.api import blueprint
 from growser.app import app
-from growser.models import Repository
-from growser.models import Recommendation, RecommendationModel
+from growser.models import AllTimeRanking, AllTimeRankingByLanguage, Language, \
+    MonthlyRanking, MonthlyRankingByLanguage, Repository, WeeklyRanking, \
+    WeeklyRankingByLanguage, Awards
+
+
+app.register_blueprint(blueprint, url_prefix="/api")
 
 
 @app.route("/")
@@ -18,12 +24,19 @@ def index():
 def repository(name: str):
     """Recommendations and other trends for a repository."""
     repo = Repository.query.filter(Repository.name == name).first_or_404()
-    return render_template("repository.html", repo=repo)
+    awards = Awards.query.filter(Awards.repo_id == repo.repo_id).all()
+    return render_template("repository.html", repo=repo, awards=awards)
+
+
+@app.route("/r/<path:name>/rankings")
+def rankings(name: str):
+    repo = Repository.query.filter(Repository.name == name).first_or_404()
+    return render_template("rankings.html", repo=repo)
 
 
 @app.route("/r/<path:name>/timeline")
 def timeline(name: str):
-    return "test"
+    return name
 
 
 @app.route("/o/<name>")
@@ -39,44 +52,61 @@ def organizations():
     return render_template("organizations.html", results=results)
 
 
-@app.route("/l/")
-@app.route("/l/<name>")
-def language(name: str=""):
-    """Interesting repositories based on language."""
-    query = Repository.query.order_by(Repository.num_unique.desc())
-    if name:
-        query = query.filter(Repository.language == name)
-    results = query.limit(100).all()
-    return render_template("language.html", results=results, language=name)
+@app.route("/b/")
+@app.route("/b/<language>")
+def browse(language: str=None):
+    per_page = 100
+    page = int(request.args.get('pp', 1))
+    period = request.args.get('p', None)
+    for_date = request.args.get('d', None)
 
+    def week_start(fd):
+        return pd.Period(fd, 'W-SAT')
 
-@app.route("/api/v1/daily_events/<repo_id>")
-def report_daily_events(repo_id):
-    daily_events = reports.daily_events_by_repo(repo_id)
-    return jsonify({"result": daily_events})
+    def month_start(fd):
+        return pd.Period(fd, 'M')
 
+    models = {None: [AllTimeRanking, AllTimeRankingByLanguage],
+              'week': [WeeklyRanking, WeeklyRankingByLanguage, week_start],
+              'month': [MonthlyRanking, MonthlyRankingByLanguage, month_start]}
 
-@app.route("/api/v1/recommendations/<model_id>/<repo_id>")
-def recommendations(model_id, repo_id):
-    model = RecommendationModel.query.get_or_404(model_id)
-    recs = Recommendation.query.filter(Recommendation.repo_id == repo_id).all()
-    rv = {"model": model_to_dict(model), "results": []}
-    for rec in recs:
-        rv["results"].append({
-            "score": rec.score,
-            "repo": model_to_dict(rec.repository)
-        })
-    return jsonify(rv)
+    if period not in models:
+        abort(404)
 
+    opts = models[period]
+    model = opts[1] if language else opts[0]
+    query = model.query
+    if language:
+        query = query.filter(model.language == language)
 
-@app.template_filter('to_json')
-def to_json(value):
-    return json.dumps(value)
+    current_date = None
+    if hasattr(model, 'date'):
+        current_date = date.today()
+        # Do not show rankings for current week
+        if period == 'week':
+            current_date = current_date - timedelta(days=7)
 
+        def default_date():
+            rv = date.today()
+            if period == 'week':
+                rv = date.today() - timedelta(days=7)
+            return rv
 
-def model_to_dict(row):
-    return dict((col, getattr(row, col))
-                for col in row.__table__.columns.keys())
+        if not for_date:
+            for_date = default_date()
+
+        for_date = opts[2](for_date)
+        query = query.filter(model.date == for_date.start_time.date())
+
+    result = query.order_by(model.rank).limit(per_page) \
+        .offset(0 if page == 1 else (page-1) * per_page + 1).all()
+
+    languages = Language.top().to_dict()
+    return render_template("language.html",
+                           rankings=result, language=language, period=period,
+                           for_date=for_date, current_date=current_date,
+                           page=page, languages=languages)
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0')

@@ -14,7 +14,7 @@
             </td>
             <td class="small">
                 {%- if repo.language -%}
-                <a href="{{ url_for('language', name=repo.language) }}">{{ repo.language }}</a>
+                <a href="{{ url_for('browse', language=repo.language) }}">{{ repo.language }}</a>
                 {%- endif -%}
             </td>
             <td class="small">{{ repo.description|truncate(170, False) }}</td>
@@ -32,7 +32,7 @@
         <span class="small">
             <span class="glyphicon glyphicon-star" aria-hidden="true"></span> {{ "{:,.0f}".format(repo.num_unique) }}
             {% if repo.language %}
-            / <a href="{{ url_for('language', name=repo.language) }}">{{ repo.language }}</a>
+            / <a href="{{ url_for('browse', language=repo.language) }}">{{ repo.language }}</a>
             {% endif %}
             / <a href="https://github.com/{{repo.name}}" class="glyphicon glyphicon-download-alt"></a>
         </span>

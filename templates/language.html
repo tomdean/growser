@@ -1,27 +1,97 @@
 {% extends "layout.html" %}
 
-{% block title %}{{ language }}{% endblock %}
+{% block title %}Most Popular Projects{% endblock %}
 {% block body %}
-    <div class="jumbotron" style="margin-top: -20px; padding-top: 16px; padding-bottom: 24px;">
+    <div class="jumbotron" id="subheader">
         <div class="container">
-            <h2>Most Popular <strong>{{ language }}</strong> Projects</h2>
+            <h2>Most Popular Projects in
+                <div class="btn-group">
+                    <a class="dropdown-toggle" data-toggle="dropdown" href="#" role="button" aria-haspopup="true" aria-expanded="false">
+                    {{ language|default("All Languages", true) }} <span class="caret"></span>
+                    </a>
+                    <ul class="dropdown-menu">
+                    <li><a href="{{ url_for('browse') }}">All Languages</a></li>
+                    {% for l in languages %}
+                     <li><a href="{{ url_for('browse', language=l.name, p=period, d=for_date.start_time.date() if for_date else None) }}">{{ l.name }}</a></li>
+                    {% endfor %}
+                    </ul>
+                </div>
+            </h2>
+        </div>
+         <div id="menu" class="container">
+            <ul class="nav nav-tabs">
+                <li role="presentation"{% if not period %} class="active"{% endif %}><a href="{{ url_for('browse', language=language) }}">All Time</a></li>
+                <li role="presentation"{% if period == "month" %} class="active"{% endif %}>
+                    <a href="{{ url_for('browse', language=language, p="month") }}">By Month</a>
+                </li>
+                <li role="presentation"{% if period == "week" %} class="active"{% endif %}>
+                    <a href="{{ url_for('browse', language=language, p="week") }}">By Week</a>
+                </li>
+            </ul>
         </div>
     </div>
+
     <div class="container">
-        <div class="row">
-            <div class="col-md-2">
-                <div class="list-group">
-                  <a href="#" class="list-group-item active">All-Time</a>
-                  <a href="#" class="list-group-item">This Week</a>
-                  <a href="#" class="list-group-item">This Month</a>
-                  <a href="#" class="list-group-item">Last Month</a>
-                  <a href="#" class="list-group-item">This Year</a>
-                </div>
-            </div>
-            <div class="col-md-9">
-                {% from 'list.html' import repositories %}
-                {{ repositories(results) }}
-            </div>
+        <div class="col-md-4">
+        {% if current_date %}
+            <nav class="pull-left">
+              <ul class="pager">
+                <li><a href="{{ url_for('browse', language=language, pp=page, p=period, d=(for_date-1).start_time.date() if for_date else None) }}">Previous</a></li>
+                <li{% if for_date == current_date %} class="disabled"{% endif %} ><a href="{{ url_for('browse', language=language, pp=page, p=period, d=(for_date+1).start_time.date() if for_date else None) }}">Next</a></li>
+              </ul>
+            </nav>
+        {% endif %}
         </div>
+        <div class="col-md-4 text-center">
+            <h3 style="margin-top:0;">{{ for_date|default("All Time", true) }}</h3>
+        </div>
+        <div class="col-md-4 text-right">
+            <nav>
+              <ul class="pagination pagination-sm">
+                <li{% if page == 1 %} class="disabled"{% endif %}>
+                  <a href="#" aria-label="Previous">
+                    <span aria-hidden="true">&laquo;</span>
+                  </a>
+                </li>
+              {% for p in range(1,6) -%}
+                <li{% if page == p %} class="active"{% endif %}><a href="{{ url_for('browse', language=language, p=period, d=for_date, pp=p) }}">{{ p }}</a></li>
+              {% endfor -%}
+                <li{%if page ==  5 %} class="disabled"{% endif %}>
+                  <a href="#" aria-label="Next">
+                    <span aria-hidden="true">&raquo;</span>
+                  </a>
+                </li>
+              </ul>
+            </nav>
+        </div>
+    </div>
+
+    <div class="container">
+      <div class="row">
+        <table class="table table-striped">
+            <tr>
+                <th>Rank</th>
+                <th>Name</th>
+                <th>Language</th>
+                <th>Events</th>
+                <th>Description</th>
+            </tr>
+        {%- for result in rankings %}
+            <tr>
+                <td>{{ result.rank }}.</td>
+                <td>
+                    <a href="{{ url_for('repository', name=result.repository.name) }}">{{ result.repository.name }}</a>
+                </td>
+                <td class="small">
+                    {%- if result.repository.language -%}
+                    <a href="{{ url_for('browse', language=result.repository.language) }}">{{ result.repository.language }}</a>
+                    {%- endif -%}
+                </td>
+                <td class="small">{{ "{:,.0f}".format(result.num_events) }}</td>
+                <td class="small">{{ result.repository.description|truncate(170, False) }}</td>
+            </tr>
+        {%- endfor %}
+        </table>
+      </div>
     </div>
 {% endblock %}

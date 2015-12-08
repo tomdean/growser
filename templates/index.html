@@ -1,1 +1,39 @@
-asdf
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/metrics-graphics/2.7.0/metricsgraphics.min.css">
+<script src='https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js'></script>
+<script src='https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.0/d3.min.js' charset='utf-8'></script>
+<script  type="text/javascript" src="/static/metricsgraphics.js"></script>
+
+<style>
+.mg-baselines line {
+    opacity: 1;
+    shape-rendering: auto;
+    stroke: #f00;
+    stroke-width: 11px;
+}
+
+</style>
+
+<script>
+d3.json('/api/v1/daily_events/192', function(data) {
+    data = [data.result]
+    for (var i = 0; i < data.length; i++) {
+        data[i] = MG.convert.date(data[i], 'date');
+    }
+
+    MG.data_graphic({
+        title: "Multi-Line Chart",
+        description: "This line chart contains multiple lines.",
+        data: data,
+        width: 900,
+        height: 300,
+        right: 40,
+        target: '#fake_users2',
+        legend: ['Line 1','Line 2','Line 3'],
+        legend_target: '.legend',
+        y_accessor: ['num_events', 'num_events_avg', 'num_events_m30']
+    });
+});
+</script>
+
+<div id="fake_users2" style="width: 900px; height: 300px;"></div>
