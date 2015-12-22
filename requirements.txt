@@ -3,6 +3,7 @@ Flask>=0.10.1
 Flask-SQLAlchemy>=2.1
 google-api-python-client>=1.4.2
 gunicorn>=19.1
+numba>=0.22.1
 numpy>=1.10.1
 pandas>=0.17.0
 psycopg2>=2.6.1
