@@ -1,3 +1,4 @@
+import hashlib
 
 from sqlalchemy.orm import relationship
 from sqlalchemy import Column, Date, DateTime, Float, Integer, \
@@ -23,6 +24,10 @@ class Repository(db.Model):
     num_watchers = Column(Integer, nullable=False)
     updated_at = Column(DateTime, nullable=False)
     created_at = Column(DateTime, nullable=False)
+
+    @property
+    def hashid(self):
+        return hashlib.md5(self.name.encode('utf-8')).hexdigest()[:12]
 
 
 class Login(db.Model):
@@ -125,24 +130,24 @@ class AllTimeRankingByLanguage(_BaseRanking, _LanguageRanking, db.Model):
     pass
 
 
-class Award(db.Model):
-    award_id = Column(Integer, nullable=False, primary_key=True)
+class Badge(db.Model):
+    badge_id = Column(Integer, nullable=False, primary_key=True)
     name = Column(String(32), nullable=False)
     frequency = Column(String(1), nullable=False)
 
 
-class Awards(db.Model):
-    award_id = Column(Integer, nullable=False, primary_key=True)
+class Badges(db.Model):
+    badge_id = Column(Integer, nullable=False, primary_key=True)
     awarded_on = Column(DateTime, nullable=False, primary_key=True)
     repo_id = Column(Integer, nullable=False, primary_key=True)
     votes = Column(Integer, nullable=False)
     total = Column(Integer, nullable=False)
     votes_pct = Column(Float, nullable=False)
 
-    award = relationship(
-        Award,
-        foreign_keys=Award.award_id,
-        primaryjoin="Awards.award_id == Award.award_id",
+    badge = relationship(
+        Badge,
+        foreign_keys=Badge.badge_id,
+        primaryjoin="Badges.badge_id == Badge.badge_id",
         uselist=False,
         lazy="joined"
     )
