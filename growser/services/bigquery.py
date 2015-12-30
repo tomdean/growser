@@ -1,7 +1,12 @@
 from collections import Sized
 from itertools import chain
 
-from growser.services.google import BaseJob, HttpError
+from growser.services.google import BaseJob, HttpError, BigQueryService
+
+
+def configure(app):
+    return BigQueryService(app.config.get('GOOGLE_PROJECT_ID'),
+                           app.config.get('GOOGLE_CLIENT_KEY'))
 
 
 class BigQueryJob(BaseJob):

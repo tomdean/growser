@@ -6,11 +6,11 @@ import pandas as pd
 from sqlalchemy import func
 from sqlalchemy.sql import delete
 
-from growser.app import app, celery, db
+from growser.app import celery, db, log
+from growser.db import BulkInsertList
 from growser.models import AllTimeRanking, AllTimeRankingByLanguage, \
     MonthlyRanking, MonthlyRankingByLanguage, Rating, Repository, \
     WeeklyRanking, WeeklyRankingByLanguage
-from growser.tasks.database import BulkInsertList
 
 #: Earliest date to generate rankings for
 INITIAL_DATE = date(2012, 4, 1)
@@ -38,7 +38,7 @@ def update_alltime_language_rankings(language: str):
 
     .. seealso:: :func:`update_all_alltime_language_rankings`
     """
-    app.logger.info("Updating all-time rankings for %s", language)
+    log.info("Updating all-time rankings for %s", language)
     query = get_top_repositories() \
         .join(Repository, Repository.repo_id == Rating.repo_id) \
         .filter(Repository.language == language) \
@@ -129,7 +129,7 @@ def update_all_monthly_language_rankings():
 
 
 def _update_rankings(table, start_date: date, end_date: date):
-    app.logger.info("Updating %s for %s", table, start_date)
+    log.info("Updating %s for %s", table, start_date)
     query = get_top_repositories_by_date(start_date, end_date).limit(RANK_TOP_N)
 
     for_date = start_date.strftime("%Y-%m-%d")
@@ -145,7 +145,7 @@ def _update_rankings(table, start_date: date, end_date: date):
 
 def _update_language_rankings(table, language: str,
                               start_date: date, end_date: date):
-    app.logger.info("Updating %s for %s (%s)", table, start_date, language)
+    log.info("Updating %s for %s (%s)", table, start_date, language)
     query = get_top_repositories_by_date(start_date, end_date) \
         .join(Repository, Repository.repo_id == Rating.repo_id) \
         .filter(Repository.language == language) \

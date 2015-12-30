@@ -5,22 +5,24 @@ class DefaultConfig:
     CELERY_INCLUDE = (
         'growser.tasks.github',
         'growser.tasks.rankings',
+        'growser.tasks.screenshots'
     )
 
 
 class BasicConfig(DefaultConfig):
     """The configuration required to run Growser"""
-    #: Enable debugging including logging, toolbar etc.
+    #: Enable debugging (logging, toolbar)
     DEBUG = True
 
     #: GitHub username & personal access token
     GITHUB_OAUTH = ('', '')
 
-    #: Table on Big Query to temporarily store events
+    #: Table Big Query will use for temporary storage during export
     BIG_QUERY_EXPORT_TABLE = "github.events_for_export"
 
-    #: The Google Storage path used by Big Query for exporting events
-    BIG_QUERY_EXPORT_PATH = "gs://your_bucket_name/events/events_{date}_*.csv.gz"
+    #: The Google Storage path used by Big Query for exporting events. Refer to
+    #: https://goo.gl/dSWT6U for additional information.
+    BIG_QUERY_EXPORT_PATH = "gs://my-bicket/events/events_{date}_*.csv.gz"
 
     #: Local path to download events
     LOCAL_IMPORT_PATH = "data/events"

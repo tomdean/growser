@@ -6,21 +6,23 @@ import os
 
 from sqlalchemy import func
 
-from growser.app import app, celery, db
+from growser.app import celery, db, log
 from growser.services import github
 from growser.models import Rating, Repository
+from growser.tasks.screenshots import update_repository_screenshots
 
 
 def update_repositories(repos: list, age: int=86400*14):
     """Call the API for the given repositories, saving the results to disk."""
     for idx, repo in enumerate(repos):
         update_repository.delay(repo, age)
+        update_repository_screenshots.delay(repo)
 
 
 @celery.task
-def update_popular_repositories(limit: int=25000):
+def update_popular_repositories(limit: int=1000):
     """Update local data for repositories sorted by most stars & forks."""
-    top = Repository.query.order_by(Repository.num_unique.desc()).limit(limit)
+    top = Repository.query.order_by(Repository.num_events.desc()).limit(limit)
     update_repositories(top.all())
 
 
@@ -44,7 +46,7 @@ def update_repository(repo, age: int):
         stats = os.path.getctime(filename)
         if age > time.time() - stats:
             return False
-    app.logger.debug("Fetching {}".format(repo.name))
+    log.debug("Fetching repository {}".format(repo.name))
     content = get_with_retry(*repo.name.split("/"))
     with gzip.open(filename, "wb") as gz:
         gz.write(content)
@@ -64,7 +66,7 @@ def get_with_retry(user: str, name: str) -> str:
     rv = github.repository(user, name)
     if b'rate limit' in rv:
         reset = get_rate_limit() - int(time.time())
-        app.logger.info("Sleeping for {}".format(reset))
+        log.info("Sleeping for {}".format(reset))
         time.sleep(reset)
         rv = get_with_retry(user, name)
     return rv

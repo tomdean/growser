@@ -2,11 +2,11 @@ from datetime import datetime
 import time
 import os
 
-from growser.app import app, bigquery
-from growser.services.bigquery import PersistQueryToTable, ExportTableToCSV, \
-    DeleteTable
-from growser.services.storage import DownloadFile, DeleteFile, \
-    FindFilesMatchingPrefix
+from growser.app import app, log
+from growser.services.bigquery import BigQueryService, PersistQueryToTable, \
+    ExportTableToCSV, DeleteTable
+from growser.services.storage import CloudStorageService, DownloadFile, \
+    DeleteFile, FindFilesMatchingPrefix
 
 
 class BlockingJobPipeline(object):
@@ -21,29 +21,31 @@ class BlockingJobPipeline(object):
 
     def run(self):
         for job_class, args, kwargs in self.jobs:
-            app.logger.debug("Running job " + job_class.__name__)
+            log.debug("Running job " + job_class.__name__)
             job = job_class(self.service)
             job.run(*args, **kwargs)
             while not job.is_complete:
-                app.logger.info("Job not complete, waiting...")
+                log.info("Job not complete, waiting...")
                 time.sleep(self.block_duration)
 
 
-def export_monthly_events_to_csv(year: int, month: int):
-    _export_query_to_csv("month", year, month)
+def export_monthly_events_to_csv(service: BigQueryService,
+                                 year: int, month: int):
+    _export_query_to_csv(service, "month", year, month)
 
 
-def export_yearly_events_to_csv(year: int):
+def export_yearly_events_to_csv(service: BigQueryService, year: int):
     if datetime.now().year == year:
         raise Exception('Archive not available for current year')
-    _export_query_to_csv("year", year)
+    _export_query_to_csv(service, "year", year)
 
 
-def _export_query_to_csv(table: str, year: int, month: int=None):
+def _export_query_to_csv(service: BigQueryService, table: str,
+                         year: int, month: int=None):
     """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
     month = str(month).zfill(2) if month else ''  # Pad with leading 0
     for_date = '{}{}'.format(year, month)
-    app.logger.debug('Events for {}'.format(for_date))
+    log.debug('Events for {}'.format(for_date))
     if year >= 2015:
         query = """
             SELECT
@@ -75,23 +77,23 @@ def _export_query_to_csv(table: str, year: int, month: int=None):
     export_path = app.config.get('BIG_QUERY_EXPORT_PATH').format(date=for_date)
     query = query.format(table=table, date=for_date)
 
-    pipeline = BlockingJobPipeline(bigquery)
+    pipeline = BlockingJobPipeline(service)
     pipeline.add(PersistQueryToTable, query, export_table)
     pipeline.add(ExportTableToCSV, export_table, export_path)
     pipeline.add(DeleteTable, export_table)
     pipeline.run()
 
 
-def download_csv_files(service):
+def download_csv_files(service: CloudStorageService):
     """Download all files in the export folder and delete them."""
     export_path = app.config.get('BIG_QUERY_EXPORT_PATH').replace("gs://", "")
     bucket, path = os.path.dirname(export_path).split("/", 1)
 
     archives = FindFilesMatchingPrefix(service).run(bucket, path)
-    app.logger.debug("Found {} archives".format(len(archives)))
+    log.debug("Found {} archives".format(len(archives)))
     for file in archives:
         size = round(int(file['size'])/(1024*1024), 2)
-        app.logger.debug("Downloading {} ({}MB)".format(file['name'], size))
+        log.debug("Downloading {} ({}MB)".format(file['name'], size))
         DownloadFile(service).run(bucket, file['name'],
                                   app.config.get('LOCAL_IMPORT_PATH'))
         DeleteFile(service).run(bucket, file['name'])

@@ -14,12 +14,20 @@ def events(repo_id):
 @blueprint.route("/v1/recommendations/<model_id>/<repo_id>")
 def recommendations(model_id, repo_id):
     model = RecommendationModel.query.get_or_404(model_id)
-    recs = Recommendation.query.filter(Recommendation.repo_id == repo_id).all()
+    recs = Recommendation.query \
+        .filter(Recommendation.model_id == model_id) \
+        .filter(Recommendation.repo_id == repo_id)\
+        .order_by(Recommendation.score.desc()).all()
+
     rv = {"model": model_to_dict(model), "results": []}
     for rec in recs:
+        repo = model_to_dict(rec.repository)
+        repo['url'] = "/r/" + repo['name']
+        repo['github_url'] = "https://github.com/" + repo['name']
+        repo['image'] = "/static/github/t/" + rec.repository.hashid + ".jpg"
         rv["results"].append({
             "score": rec.score,
-            "repo": model_to_dict(rec.repository)
+            "repo": repo
         })
     return jsonify(rv)
 

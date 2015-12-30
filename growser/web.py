@@ -8,7 +8,7 @@ from growser.api import blueprint
 from growser.app import app
 from growser.models import AllTimeRanking, AllTimeRankingByLanguage, Language, \
     MonthlyRanking, MonthlyRankingByLanguage, Repository, WeeklyRanking, \
-    WeeklyRankingByLanguage, Awards
+    WeeklyRankingByLanguage
 
 
 app.register_blueprint(blueprint, url_prefix="/api")
@@ -24,19 +24,13 @@ def index():
 def repository(name: str):
     """Recommendations and other trends for a repository."""
     repo = Repository.query.filter(Repository.name == name).first_or_404()
-    awards = Awards.query.filter(Awards.repo_id == repo.repo_id).all()
-    return render_template("repository.html", repo=repo, awards=awards)
+    return render_template("repository.html", repo=repo)
 
 
 @app.route("/r/<path:name>/rankings")
 def rankings(name: str):
     repo = Repository.query.filter(Repository.name == name).first_or_404()
     return render_template("rankings.html", repo=repo)
-
-
-@app.route("/r/<path:name>/timeline")
-def timeline(name: str):
-    return name
 
 
 @app.route("/o/<name>")

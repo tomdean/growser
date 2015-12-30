@@ -3,7 +3,14 @@ import os
 
 from apiclient.http import MediaIoBaseDownload
 
-from growser.services.google import BaseJob, HttpError
+from growser.services.google import BaseJob, HttpError, CloudStorageService
+
+
+def configure(app):
+    return CloudStorageService(
+        app.config.get('GOOGLE_PROJECT_ID'),
+        app.config.get('GOOGLE_CLIENT_KEY')
+    )
 
 
 class DownloadFile(BaseJob):
