@@ -27,6 +27,9 @@ class Repository(db.Model):
     def hashid(self):
         return hashlib.md5(self.name.encode('utf-8')).hexdigest()[:12]
 
+    def __repr__(self):
+        return "Repository(repo_id={}, name={})".format(self.repo_id, self.name)
+
 
 class Login(db.Model):
     login_id = Column(Integer, primary_key=True)
