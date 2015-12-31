@@ -1,7 +1,8 @@
 import logging.config
 
 
-def configure(app):
+def configure(app, cfg=None):
     app.debug = app.logger.name and app.config.get('DEBUG', False)
-    logging.config.fileConfig("logging.cfg")
+    if cfg:
+        logging.config.fileConfig(cfg)
     return app.logger

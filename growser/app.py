@@ -11,7 +11,7 @@ app = Flask(__name__, template_folder="../templates", static_folder="../static")
 app.config.from_object('growser.config.BasicConfig')
 app.config.from_envvar('GROWSER_CONFIG', False)
 
-log = log.configure(app)
+log = log.configure(app, "logging.cfg")
 db = database.configure(app)
 bigquery = bigquery.configure(app)
 storage = storage.configure(app)
