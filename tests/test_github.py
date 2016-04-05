@@ -5,7 +5,7 @@ import re
 import responses
 import unittest
 
-from growser.services import github
+from growser.tasks import github
 
 
 class GithubAPITestCase(unittest.TestCase):
@@ -16,7 +16,7 @@ class GithubAPITestCase(unittest.TestCase):
         url = self.base_url + '/repos/twbs/bootstrap'
         body = '{"id": 2126244, "name": "bootstrap", "full_name": "twbs/bootstrap"}'
         responses.add(responses.GET, url, body, content_type='application/json')
-        result = json.loads(github.repository('twbs', 'bootstrap').decode('UTF-8'))
+        result = json.loads(github.repository('twbs/bootstrap').decode('UTF-8'))
         body_js = json.loads(body)
         self.assertEqual(responses.calls[0].request.url, url)
         self.assertEqual(body_js['id'], result['id'])
