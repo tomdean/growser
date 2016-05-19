@@ -1,0 +1,99 @@
+{% extends "layout.html" %}
+
+{% block title %}Recent Releases{% endblock %}
+{% block body %}
+    <div id="subheader" class="jumbotron">
+        <div class="container">
+            <h2>Recent Releases{% if ctx.language %} in {{ctx.language}}{% endif %}</h2>
+        </div>
+    </div>
+
+    <div class="container">
+        <nav class="text-center">
+          <ul class="pagination pagination-sm">
+            <li{% if ctx.page == 1 %} class="disabled"{% endif %}>
+              <a href="{% if ctx.page == 1%}#{% else %}{{ url_for('releases', language=ctx.language, p=ctx.page-1) }}{% endif %}" aria-label="Previous">
+                <span aria-hidden="true">&laquo;</span>
+              </a>
+            </li>
+          {% for p in range(1, 11) -%}
+            <li{% if ctx.page == p %} class="active"{% endif %}><a href="{{ url_for('releases', language=ctx.language, p=p) }}">{{ p }}</a></li>
+          {% endfor -%}
+            <li{%if ctx.page ==  5 %} class="disabled"{% endif %}>
+              <a href="#" aria-label="Next">
+                <span aria-hidden="true">&raquo;</span>
+              </a>
+            </li>
+          </ul>
+        </nav>
+    </div>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-2">
+                <div class="list-group">
+                    <a href="/releases" class="list-group-item{% if not ctx.language %} active{% endif %}">All Languages</a>
+                {%- for language in ctx.languages %}
+                    <a href="{{ url_for('releases', language=language.name) }}" class="list-group-item{% if language.name == ctx.language %} active{% endif %}">{{ language.name }}</a>
+                {%- endfor %}
+                </div>
+            </div>
+            <div class="col-md-10">
+                <table class="table table-striped table-condensed">
+                    <tr>
+                        <th>Repository</th>
+                        <th>Release</th>
+                        <th>Language</th>
+                        <th>Users</th>
+                        <th>Date</th>
+                    </tr>
+                {%- for release in ctx.releases %}
+                    <tr>
+                        <td>
+                            <a href="https://github.com/{{ release.repository.name }}" target="_blank"><img src="{{ url_for('static', filename="github.png") }}"/></a>
+                            <a href="{{ url_for('repository', name=release.repository.name) }}" name="release-{{ release.release_id }}">{{ release.repository.name }}</a>
+                            {%- if release.is_draft %} <span class="label label-default">Draft</span>{% endif %}
+                            {%- if release.is_prerelease %} <span class="label label-default">Pre-release</span>{% endif %}
+                        </td>
+                        <td>
+                            {%- if release.body %}
+                            <a href="#release-{{ release.release_id }}" data-api-uri="{{ url_for('api.release', release_id=release.release_id) }}" class="preview-release">{{ (release.name or release.tag)|truncate(24) }}</a>
+                            {%- else %}
+                            {{ (release.name or release.tag)|truncate(24) }}
+                            {%- endif %}
+                        </td>
+                        <td>{{ release.repository.language }}</td>
+                        <td>{{ "{:,.0f}".format(release.repository.num_events or 0) }}</td>
+                        <td>{{ release.created_at.strftime("%Y-%m-%d") }}</td>
+                    </tr>
+                {%- endfor %}
+                </table>
+            </div>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block footer %}
+<script>
+    {% raw %}
+    $(document).ready(function() {
+        $('.preview-release').click(function() {
+            var row = $(this).parent().parent();
+
+            if (row.next().hasClass('preview-release-body')) {
+                row.next().remove();
+                return false;
+            }
+
+            $.get($(this).attr('data-api-uri'), function(html) {
+                row.after('<tr class="preview-release-body"><td colspan="5">' + html + '</td></tr>');
+                row.next().find('a').attr('target', '_blank');
+            });
+
+            return false;
+        });
+    });
+    {% endraw %}
+</script>
+{% endblock %}

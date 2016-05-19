@@ -1,115 +1,215 @@
-import glob
+import datetime
+
 import numpy as np
 import pandas as pd
 
-from growser.app import log
-
-#: Minimum number of stars & forks a repository needs to be included
-MIN_REPO_EVENTS = 25
-
-#: Minimum number of events a user must have before including them
-MIN_LOGIN_EVENTS = 10
-
-#: Some users don't have refined taste. Also bots.
-MAX_LOGIN_EVENTS = 1000
+from growser.app import app, log
+from growser.tasks import BlockingJobPipeline
+from growser.services.bigquery import (
+    DeleteTable,
+    ExportTableToCSV,
+    PersistQueryToTable
+)
 
 
-def process_events(path: str="data/events/events_*.gz"):
-    """Process the entirety of the Github-Archive files.
+class BatchManager:
+    """Process new events from Github Archive into a local database.
 
-    :param path: Location of the gzip archives
-    """
-    log.info("Processing GitHub Archive files")
-    events = _get_events_dataframe(path)
+    It also maintains separate CSV files for logins & repositories."""
 
-    # Find all logins & repos and assign them unique IDs
-    log.info("Finding unique repositories & logins")
-    repositories = _unique_values(events, 'repo', 'login')
-    logins = _unique_values(events, 'login', 'repo')
+    def __init__(self, engine, repos, logins):
+        self.engine = engine
+        self.repos = Source(repos, ['repo_id', 'name', 'created_at'])
+        self.logins = Source(logins, ['login_id', 'login', 'created_at'])
 
-    # Filter logins & repos to prune outliers and items with too little activity
-    log.info("Filter events to repos & logins with min # of events")
-    min_repo = repositories[repositories['num_unique'] >= MIN_REPO_EVENTS]
-    min_login = logins[(logins['num_unique'] >= MIN_LOGIN_EVENTS) &
-                       (logins['num_unique'] <= MAX_LOGIN_EVENTS)]
+    def process_batch(self, filename: str):
+        log.info("Processing %s", filename)
+        df = self._process_events_csv(filename).rename(columns={'repo': 'name'})
 
-    # Update events to use numeric repo/login IDs
-    log.info("Joining events to repos & logins")
-    fields = ['type', 'repo_id', 'login_id', 'created_at_x']
-    events = pd.merge(events, min_repo, on='repo')
-    events = pd.merge(events, min_login, on='login')[fields] \
-        .rename(columns={'created_at_x': 'created_at'})
+        # Find new repositories and logins, assigning them new IDs
+        log.info("Finding new logins & repositories")
+        new_repos = self.find_delta(df, self.repos.data, 'repo_id', 'name')
+        new_logins = self.find_delta(df, self.logins.data, 'login_id', 'login')
 
-    # Eliminate dupes by grouping by type
-    log.info("Group per user/repo/type")
-    per_type = events.groupby(['login_id', 'repo_id', 'type']) \
-        .agg({'created_at': 'min'}) \
-        .reset_index()
+        log.info("Adding new logins and repositories")
+        self.repos.update(new_repos)
+        self.logins.update(new_logins)
 
-    # If a user has starred and forked a repo, rating will be 3
-    log.info("Group per user/repo")
-    final = per_type.groupby(['login_id', 'repo_id']) \
-        .agg({'type': 'sum', 'created_at': 'min'}) \
-        .reset_index() \
-        .rename(columns={'type': 'rating'})
+        # Eliminate dupes by grouping by type
+        log.info("Group per user/repo/type")
+        df = df.groupby(['login', 'name', 'type']) \
+            .agg({'created_at': 'min'}) \
+            .reset_index()
 
-    log.info("Writing results to CSV")
-    repositories = repositories.rename(columns={'repo': 'name'})
-    ratings = final[['login_id', 'repo_id', 'rating', 'created_at']].copy(False)
+        # Group & sum on rating will give us a 3 if a user starred & forked
+        log.info("Group per user/repo")
+        df = df.groupby(['login', 'name']) \
+            .agg({'type': 'sum', 'created_at': 'min'}) \
+            .reset_index() \
+            .rename(columns={'type': 'rating'})
 
-    def to_csv(df: pd.DataFrame, name: str):
-        df.to_csv("data/csv/{}.csv".format(name), header=True, index=False)
+        # Replace the string login & repo values with our new integer ID's
+        log.info("Adding repo_id to events")
+        events = pd.merge(df, self.repos.data[['repo_id', 'name']], on='name')
+        events = events[['repo_id', 'login', 'rating', 'created_at']]
 
-    to_csv(repositories, 'repos')
-    to_csv(logins, 'logins')
-    to_csv(ratings, 'ratings')
+        log.info("Adding login_id to events")
+        events = pd.merge(events, self.logins.data[['login_id', 'login']], on='login')
+        events = events[['login_id', 'repo_id', 'rating', 'created_at']]
 
-    # Make a copy to import into SQL
-    ratings['created_at'] = pd.to_datetime(final['created_at'], unit='s')
-    to_csv(ratings, 'ratings.datetime')
+        # Using Postgres timestamp (datetime), convert from epoch.
+        log.info('Converting dates')
+        for ds in (events, new_repos, new_logins):
+            ds['created_at'] = pd.to_datetime(ds['created_at'], unit='s')
+
+        # Explicitly set types
+        events = events.sort_values(['created_at', 'repo_id'])
+        events['login_id'] = events['login_id'].astype(np.int)
+        events['repo_id'] = events['repo_id'].astype(np.int)
+        events['rating'] = events['rating'].astype(np.int)
+
+        # Add derived columns
+        df['owner'] = df['name'].str.split('/').str.get(0)
+
+        # Save to CSV for bulk inserting into database
+        log.info("Saving batch to CSV")
+        new_repos.to_csv('data/batch/repos.csv', index=False)
+        new_logins.to_csv('data/batch/logins.csv', index=False)
+        events.to_csv('data/batch/events.csv', index=False)
+
+        log.info("Processing CSV files in Postgres")
+        sql = open("deploy/etl/sql/process_events_batch.sql").read()
+        self.engine.execute(sql)
+        self.repos.append_delta()
+        self.logins.append_delta()
+
+    @staticmethod
+    def _process_events_csv(filename: str) -> pd.DataFrame:
+        fields = ['type', 'repo', 'login', 'created_at']
+        dtypes = {'type': np.int, 'repo': np.object,
+                  'login': np.object, 'created_at': np.long}
+
+        df = pd.read_csv(filename, engine='c', usecols=fields, dtype=dtypes)
+        df['created_at'] /= 1000000
+        df['created_at'] = df['created_at'].astype(np.int)
+
+        return df.sort_values('created_at')
+
+    @staticmethod
+    def find_delta(batch: pd.DataFrame, source: pd.DataFrame,
+                   id_field: str, name_field: str) -> pd.DataFrame:
+        """Find all items that exist in `batch` but not in `source`."""
+        df = batch.groupby(name_field) \
+            .agg({'created_at': [np.amin]}) \
+            .reset_index()
+
+        df.columns = [name_field, 'created_at']
+        df = df.sort_values(['created_at', name_field]) \
+            .reset_index().drop('index', 1)
+
+        delta = df[~df[name_field].isin(source[name_field])].copy()
+        if len(delta):
+            max_id = int(source[id_field].iloc[-1]) + 1
+            delta[id_field] = list(range(max_id, max_id + len(delta)))
+            delta = delta[[id_field, name_field, 'created_at']]
+
+        return delta
 
 
-def _unique_values(df: pd.DataFrame, column: str, unique: str) -> pd.DataFrame:
-    # Extract unique values from a `pandas.Series` sorted by earliest timestamp
-    rv = df.groupby(column) \
-        .agg({'created_at': [np.amin, np.count_nonzero],
-              unique: lambda x: len(x.unique())}) \
-        .reset_index()
-    rv.columns = rv.columns.droplevel(0)
-    rv = rv.rename(columns={
-        '': column,
-        '<lambda>': 'num_unique',
-        'amin': 'created_at',
-        'count_nonzero': 'num_events'
-    })
-    columns = [column + '_id', column, 'num_events', 'num_unique', 'created_at']
-    return rv.sort_values(['created_at', column]) \
-        .reset_index(drop=True) \
-        .reset_index() \
-        .rename(columns={'index': column + '_id'})[columns]
+class Source:
+    """Simple wrapper around repos & logins"""
+
+    def __init__(self, filename: str, fields: list):
+        self.filename = filename
+        self.data = pd.read_csv(filename)[fields]
+        self.delta = None
+
+    def update(self, delta):
+        self.delta = delta
+        self.data = pd.concat([self.data, delta], ignore_index=True)
+
+    def append_delta(self):
+        with open(self.filename, 'a') as fh:
+            self.delta.to_csv(fh, header=False, index=False)
 
 
-def _get_renamed_repositories() -> pd.DataFrame:
-    """Returns a mapping of repositories that have been renamed"""
-    rv = open("data/github/redirects.csv").read().split("\n")
-    rv = [r for r in map(lambda x: x.split(","), rv) if len(r) == 2]
-    return pd.DataFrame(rv, columns=["repo", "to"])
+def export_daily_events_to_csv(bigquery, year: int, month: int, day: int):
+    _export_query_to_csv(bigquery, year, month, day)
 
 
-def _get_events_dataframe(path: str) -> pd.DataFrame:
-    files = glob.glob(path)
-    fields = ['type', 'repo', 'login', 'created_at']
-    dtypes = {'type': np.int, 'repo': np.object,
-              'login': np.object, 'created_at': np.long}
-    rv = []
-    renamed = _get_renamed_repositories()
-    for file in files:
-        log.debug("Processing " + file)
-        df = pd.read_csv(file, engine='c', usecols=fields, dtype=dtypes)
-        df = pd.merge(df, renamed, how="left", on="repo")
-        df['created_at'] = (df['created_at'] / 1000000).astype(np.int)
-        df['repo'] = df['to'].fillna(df['repo'])
-        df.drop(['to'], axis=1, inplace=True)
-        rv.append(df)
-    log.info("Concatenating DataFrames")
-    return pd.concat(rv)
+def export_monthly_events_to_csv(bigquery, year: int, month: int):
+    _export_query_to_csv(bigquery, year, month)
+
+
+def export_yearly_events_to_csv(bigquery, year: int):
+    if datetime.datetime.now().year <= year:
+        raise Exception('Archive not available for current year')
+    _export_query_to_csv(bigquery, year)
+
+
+def _export_query_to_csv(bigquery, year: int, month: int=None, day: int=None):
+    """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
+    month = str(month).zfill(2) if month else ''
+    day = str(day).zfill(2) if day else ''
+    for_date = '{}{}{}'.format(year, month, day)
+    log.debug('Events for {}'.format(for_date))
+
+    if day:
+        table = "day.events_{}".format(for_date)
+    elif month:
+        table = "month.{}".format(for_date)
+    else:
+        table = "year.{}".format(year)
+
+    if year >= 2015:
+        if day is not None:
+            query = """
+                SELECT
+                    CASE WHEN type = 'WatchEvent' THEN 1 ELSE 2 END AS type,
+                    org.id AS org_id,
+                    repo.id AS repo_id,
+                    repo.name AS repo,
+                    actor.login AS login,
+                    actor.id AS actor_id,
+                    TIMESTAMP_TO_USEC(created_at) AS created_at
+                FROM [githubarchive:{table}]
+                WHERE type IN ('WatchEvent', 'ForkEvent')
+            """
+        else:
+            query = """
+                SELECT
+                    CASE WHEN type = 'WatchEvent' THEN 1 ELSE 2 END AS type,
+                    org_id,
+                    repo_id,
+                    repo_name AS repo,
+                    actor_login AS login,
+                    actor_id,
+                    TIMESTAMP_TO_USEC(created_at) AS created_at
+                FROM [githubarchive:{table}]
+                WHERE type IN ('WatchEvent', 'ForkEvent')
+            """
+    else:
+        query = """
+            SELECT
+                CASE WHEN type = 'WatchEvent' THEN 1 ELSE 2 END AS type,
+                repository_organization AS org,
+                (CASE WHEN repository_owner IS NULL
+                  THEN repository_name
+                   ELSE (repository_owner + '/' + repository_name)
+                END) AS repo,
+                actor AS login,
+                PARSE_UTC_USEC(created_at) AS created_at
+            FROM [githubarchive:{table}]
+            WHERE type IN ('WatchEvent', 'ForkEvent')
+              AND repository_name IS NOT NULL
+        """
+
+    export_table = app.config.get('BIG_QUERY_EXPORT_TABLE')
+    export_path = app.config.get('BIG_QUERY_EXPORT_PATH').format(date=for_date)
+    query = query.format(table=table)
+
+    pipeline = BlockingJobPipeline(bigquery)
+    pipeline.add(PersistQueryToTable, query, export_table)
+    pipeline.add(ExportTableToCSV, export_table, export_path)
+    pipeline.add(DeleteTable, export_table)
+    pipeline.run()

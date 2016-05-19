@@ -4,3 +4,5 @@ htmlcov/
 .DS_Store
 .idea/
 /data/
+static/github/
+docs/

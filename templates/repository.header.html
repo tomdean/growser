@@ -1,0 +1,63 @@
+{%- set tabs = [
+    ("Related", url_for('repository', name=ctx.repo.name), "sitemap", "repository"),
+    ("Rankings", url_for('rankings', name=ctx.repo.name), "line-chart", "rankings"),
+    ("Releases", url_for('repository_releases', name=ctx.repo.name) if ctx.repo.last_release_at else None, "tag", "repository_releases"),
+    ("Homepage", ctx.repo.homepage, "home", ""),
+    ("GitHub", ctx.repo.github_url, "github", "")
+]
+-%}
+    <style>
+    .page-header .screenshot {
+        display: table-cell;
+        width: 402px;
+        background-color: #fff;
+        border: 1px solid #c5c5c5;
+        border-bottom: 0px;
+        background: url(/static/github/md/{{ ctx.repo.hashid }}.{% if ctx.repo.homepage %}hp{% else %}readme{% endif %}.jpg);
+        background-size: 400px;
+    }
+    .page-header .screenshot img {
+        position: absolute;
+        border: 1px solid #c5c5c5;
+        margin-top: -1px; margin-left: -1px;
+    }
+    </style>
+    <div class="page-header-content">
+        <div class="wrapper">
+            <h1><a href="{{ url_for("organization", name=ctx.repo.owner) }}">{{ ctx.repo.owner }}</a> / {{ ctx.repo.short_name}}</h1>
+            {%- if ctx.repo.description %}
+            {% set description= ctx.repo.description|emojis_to_img %}
+            <div class="description">
+                {% if ctx.repo.language %}<a href="{{ url_for('browse', language=ctx.repo.language) }}">{{ ctx.repo.language }}</a>. {% endif %}
+                {{ description|safe if 'img' in description else description }}
+            </div>
+            {%- endif %}
+
+            <div class="shields">
+                <div class="shield">
+                    <span class="label">users</span><span class="notice">{{ ctx.repo.num_events|th }}</span>
+                </div>
+                {%- if ctx.ranks and ctx.ranks.all %}
+                <div class="shield">
+                    <span class="label"><a href="{{ url_for('browse') }}">overall rank</a></span><span class="notice">{{ ctx.ranks.all.rank|ordinal }}</span>
+                </div>
+                {%- endif %}
+                {%- if ctx.ranks and ctx.ranks.language %}
+                <div class="shield">
+                    <span class="label"><a href="{{ url_for('browse', language=ctx.repo.language) }}">{{ ctx.repo.language }} rank</a></span><span class="notice">{{ ctx.ranks.language.rank|ordinal }}</span>
+                </div>
+                {%- endif %}
+            </div>
+
+            <div class="pure-menu pure-menu-horizontal">
+                <nav class="pure-menu-list with-icons">
+                {%- for name, url, icon, endpoint in tabs %}
+                    <a href="{{ url }}" class="pure-menu-item pure-menu-link{% if request.endpoint ==  endpoint %} active{% endif %}">
+                        <i class="fa fa-{{ icon }}" title="{{ name }}">&nbsp;</i><span>{{ name }}</span>
+                    </a>
+                {%- endfor %}
+                </nav>
+            </div>
+        </div>
+        <div class="screenshot"></div>
+    </div>

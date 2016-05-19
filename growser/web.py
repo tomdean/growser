@@ -1,17 +1,17 @@
 from datetime import date, timedelta
+import locale
+import re
 
-from flask import abort, render_template, request
-import pandas as pd
+from flask import render_template, request
 
-from growser import reports
-from growser.api import blueprint
+from growser.api import blueprint as  api
+from growser.admin import blueprint as admin
 from growser.app import app
-from growser.models import AllTimeRanking, AllTimeRankingByLanguage, Language, \
-    MonthlyRanking, MonthlyRankingByLanguage, Repository, WeeklyRanking, \
-    WeeklyRankingByLanguage
+from growser.models import Language, Ranking, RankingPeriod, Release, Repository
 
 
-app.register_blueprint(blueprint, url_prefix="/api")
+app.register_blueprint(api, url_prefix="/api")
+app.register_blueprint(admin, url_prefix="/admin")
 
 
 @app.route("/")
@@ -24,13 +24,71 @@ def index():
 def repository(name: str):
     """Recommendations and other trends for a repository."""
     repo = Repository.query.filter(Repository.name == name).first_or_404()
-    return render_template("repository.html", repo=repo)
+
+    ranks = {'all': None, 'language': None}
+    ranks['all'] = Ranking.query \
+        .filter(Ranking.period == RankingPeriod.Recent) \
+        .filter(Ranking.repo_id == repo.repo_id) \
+        .filter(Ranking.language == "All") \
+        .order_by(Ranking.start_date.desc()).first()
+
+    if repo.language:
+        ranks['language'] = Ranking.query \
+            .filter(Ranking.period == RankingPeriod.Recent) \
+            .filter(Ranking.repo_id == repo.repo_id) \
+            .filter(Ranking.language == repo.language) \
+            .order_by(Ranking.start_date.desc()).first()
+
+    releases = Release.query \
+        .filter(Release.repo_id == repo.repo_id) \
+        .order_by(Release.created_at) \
+        .all()
+
+    from collections import Counter
+    from growser.models import Recommendation
+
+    recommendations = Recommendation.find_by_repository(3, repo.repo_id, 100)
+
+    langs = Counter([rec.repository.language for rec in recommendations if rec.repository.language])
+    languages = []
+    if len(langs):
+        repos = langs.most_common(10)
+        total = sum([_[1] for _ in repos])
+        repos.append(('Other', len(recommendations) - total))
+        repos = sorted(repos, key=lambda x: x[1], reverse=True)
+        languages = [(x[0], x[1], round(x[1] / len(recommendations) * 100, 1)) for x in repos]
+
+    colors = get_colors()
+
+    return render("repository.html",
+                  repo=repo,
+                  releases=releases,
+                  recommendations=recommendations,
+                  languages=languages,
+                  colors=colors,
+                  ranks=ranks)
 
 
 @app.route("/r/<path:name>/rankings")
 def rankings(name: str):
     repo = Repository.query.filter(Repository.name == name).first_or_404()
-    return render_template("rankings.html", repo=repo)
+    return render("rankings.html", repo=repo)
+
+
+@app.route("/r/<path:name>/releases")
+def repository_releases(name: str):
+    repo = Repository.query.filter(Repository.name == name).first_or_404()
+    return render("repository.releases.html", repo=repo)
+
+
+@app.route("/developers")
+def developers():
+    return render("developers.html")
+
+
+@app.route("/d/<path:name>")
+def developer(name: str):
+    return render("developer.html")
 
 
 @app.route("/o/<name>")
@@ -42,64 +100,101 @@ def organization(name: str):
 
 @app.route("/o/")
 def organizations():
-    results = reports.top_owners(100)
-    return render_template("organizations.html", results=results)
+    return render_template("organizations.html")
 
 
-@app.route("/b/")
-@app.route("/b/<language>")
+@app.route("/browse/")
+@app.route("/browse/<language>")
 def browse(language: str=None):
-    per_page = 100
     page = int(request.args.get('pp', 1))
     period = request.args.get('p', None)
     for_date = request.args.get('d', None)
+    language = language or "All"
 
-    def week_start(fd):
-        return pd.Period(fd, 'W-SAT')
+    period_id = {None: 4, 'm': 3, 'w': 2, 'a': 1}.get(period)
 
-    def month_start(fd):
-        return pd.Period(fd, 'M')
+    per_page = 100
+    offset = 0 if page == 1 else (page-1) * per_page
 
-    models = {None: [AllTimeRanking, AllTimeRankingByLanguage],
-              'week': [WeeklyRanking, WeeklyRankingByLanguage, week_start],
-              'month': [MonthlyRanking, MonthlyRankingByLanguage, month_start]}
+    if not for_date:
+        for_date = date.today() - timedelta(days=2)
 
-    if period not in models:
-        abort(404)
+    query = Ranking.query \
+        .filter(Ranking.end_date == for_date) \
+        .filter(Ranking.language == language) \
+        .filter(Ranking.period == period_id) \
+        .order_by(Ranking.rank)
 
-    opts = models[period]
-    model = opts[1] if language else opts[0]
-    query = model.query
+    result = query.limit(per_page).offset(offset).all()
+    return render("language.html", rankings=result, language=language, period=period)
+
+
+@app.route('/releases')
+@app.route('/releases/<string:language>')
+def releases(language: str=None):
+    per_page = 100
+    page = int(request.args.get('p', 1))
+    offset = (page-1) * per_page
+
+    languages = Language.top(15).all()
+    results = Release.query.order_by(Release.created_at.desc())
     if language:
-        query = query.filter(model.language == language)
+        results = results.filter(Release.repository.has(language=language))
 
-    current_date = None
-    if hasattr(model, 'date'):
-        current_date = date.today()
-        # Do not show rankings for current week
-        if period == 'week':
-            current_date = current_date - timedelta(days=7)
+    results = results.offset(offset).limit(per_page).all()
 
-        def default_date():
-            rv = date.today()
-            if period == 'week':
-                rv = date.today() - timedelta(days=7)
-            return rv
+    return render("releases2.html",
+                  language=language,
+                  languages=languages,
+                  releases=results,
+                  page=page)
 
-        if not for_date:
-            for_date = default_date()
 
-        for_date = opts[2](for_date)
-        query = query.filter(model.date == for_date.start_time.date())
+@app.route('/trending')
+@app.route('/trending/<string:language>')
+def trending(language: str=None):
+    return render("trending.html", language=language)
 
-    result = query.order_by(model.rank).limit(per_page) \
-        .offset(0 if page == 1 else (page-1) * per_page + 1).all()
 
-    languages = Language.top().to_dict()
-    return render_template("language.html",
-                           rankings=result, language=language, period=period,
-                           for_date=for_date, current_date=current_date,
-                           page=page, languages=languages)
+def render(template, **kwargs):
+    return render_template(template, ctx=kwargs)
+
+
+@app.template_filter()
+def ordinal(num):
+    suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(num % 10, 'th')
+    if 10 <= num % 100 <= 20:
+        suffix = 'th'
+    return str(num) + suffix
+
+
+@app.template_filter()
+def th(num):
+    return locale.format('%d', num, 1)
+
+
+@app.template_filter()
+def emojis_to_img(txt):
+    emojis = get_emojis()
+    for emoji in re.findall(":([^:]+):", txt):
+        if emoji not in emojis:
+            continue
+        txt = txt.replace(":{}:".format(emoji), '<img src="/static/{}" class="emoji" width="20" height="20" />'.format(emojis[emoji]))
+    return txt
+
+
+def get_colors():
+    if 'colors' not in app.config:
+        colors = open("data/github/languages.csv").readlines()
+        app.config['colors'] = dict([l.strip().split(",") for l in colors])
+    return app.config['colors']
+
+
+def get_emojis():
+    if 'emojis' not in app.config:
+        emojis = open("data/github/emojis.csv").readlines()
+        app.config['emojis'] = dict([l.strip().split(",") for l in emojis])
+    return app.config['emojis']
 
 
 if __name__ == "__main__":

@@ -1,0 +1,67 @@
+{%-
+set tabs = [
+    ("Browse", url_for('browse'), "search", ("repository", "browse")),
+    ("Trending", url_for('trending'), "bar-chart", "trending"),
+    ("Developers", url_for('developers'), "users", "developers"),
+    ("Blog", "http://hacknextdoor.com/growser", "rss", "blog"),
+    ("Code", "https://github.com/tomdean/growser", "code-fork", "code"),
+]
+-%}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Growser - GitHub Browser{% endblock %}</title>
+<meta name="description" content="{% block description %}{% endblock %}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/pure-min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/grids-responsive-min.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/default.css') }}">
+<link rel="stylesheet" href="//fonts.googleapis.com/css?family=Lato:400,700|Source+Sans+Pro:400,700|Inconsolata:400,700">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/fa/css/font-awesome.min.css') }}">
+</head>
+<body>
+
+<header class="site-header">
+    <div class="container">
+        <div class="pure-menu pure-menu-horizontal">
+            <a href="/" class="brand pure-menu-heading"><i class="fa fa-rocket"></i>Growser</a>
+            <a href="#" class="custom-toggle pure-menu-heading" id="toggle"><i class="fa fa-bars"></i></a>
+            <nav class="pure-menu-list with-icons">
+                {%- for name, url, icon, endpoint in tabs %}
+                <a href="{{ url }}" class="pure-menu-item pure-menu-link{% if request.endpoint in endpoint %} active{% endif %}">
+                    <i class="fa fa-{{ icon }}" title="{{ name }}"></i><span>{{ name }}</span>
+                </a>
+                {%- endfor %}
+            </nav>
+        </div>
+    </div>
+</header>
+
+<div class="page-header">
+    <div class="container">
+{% block header %}{% endblock %}
+    </div>
+</div>
+
+<main class="page-content" role="main">
+{% block body %}{% endblock %}
+</main>
+
+<script src="{{ url_for("static", filename="js/jquery.min.js") }}" type="text/javascript"></script>
+{% block footer %}{% endblock %}
+
+{% if request.endpoint != "index" %}
+<style>
+footer { margin-top: 40px; background: #303030; }
+footer .info { padding: 30px 0; }
+</style>
+<footer>
+    <div class="container info">
+        footer
+    </div>
+</footer>
+{% endif %}
+
+</body>
+</html>

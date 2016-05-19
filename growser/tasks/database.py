@@ -9,37 +9,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.schema import Index
 
 from growser.app import db, log
-from growser.db import BulkInsertCSV
-from growser.models import Login, MonthlyRanking, MonthlyRankingByLanguage, \
-    Rating, Repository, Recommendation, RecommendationModel, WeeklyRanking, \
-    WeeklyRankingByLanguage
-
-
-def initialize_database_schema():
-    """Drop & recreate the SQL schema."""
-    log.info("Drop and recreate all model tables")
-    db.drop_all()
-    db.create_all()
-
-
-def initialize_database_data_from_csv():
-    """Populate the initial database from previously generated CSV sources."""
-    # Data from GitHub Archive & static data
-    jobs = [BulkInsertCSV(Login.__table__, "data/csv/logins.csv"),
-            BulkInsertCSV(Repository.__table__, "data/csv/repositories.csv"),
-            BulkInsertCSV(Rating.__table__, "data/csv/ratings.datetime.csv"),
-            BulkInsertCSV(RecommendationModel.__table__, "data/models.csv")]
-
-    # Recommendations
-    columns = ['model_id', 'repo_id', 'recommended_repo_id', 'score']
-    for filename in glob.glob('data/recommendations/*/*.gz'):
-        jobs.append(BulkInsertCSV(Recommendation.__table__,
-                                  filename, header=False, columns=columns))
-
-    log.info("Bulk inserting CSV files into tables")
-    for job in jobs:
-        log.info("Running %s", job)
-        job.execute(db.engine)
+from growser.models import Rating, Repository, Recommendation
 
 
 def create_secondary_indexes():
@@ -61,14 +31,6 @@ def create_secondary_indexes():
     create("IX_recommendation_model_repo",
            Recommendation.model_id, Recommendation.repo_id)
 
-    def ranking_index(name, model):
-        create(name, model.repo_id, model.date)
-
-    ranking_index("IX_weekly_ranking_repo", WeeklyRanking)
-    ranking_index("IX_weekly_ranking_by_lang_repo", WeeklyRankingByLanguage)
-    ranking_index("IX_monthly_ranking_repo", MonthlyRanking)
-    ranking_index("IX_monthly_ranking_by_lang_repo", MonthlyRankingByLanguage)
-
 
 def pre_warm_tables():
     """Pre-warm tables to improve cold start performance."""
@@ -78,14 +40,15 @@ def pre_warm_tables():
 
 def merge_repository_data_sources():
     """Merge GitHub API repository data with events data."""
-    # Data from processing events gives us local ID
+    log.info("Merging repository data sources")
     df1 = pd.read_csv('data/csv/repos.csv')
-    df1['created_at'] = pd.to_datetime(df1['created_at'], unit='s')
+
+    df1['created_at'] = pd.to_datetime(df1['created_at'])
     df1['owner'] = df1['name'].str.split("/").str.get(0)
     df1 = df1[df1['owner'] != ''].copy()
 
     # GitHub API data
-    df2 = get_github_api_results("data/github-api/*.json.gz")
+    df2 = get_github_api_results("data/github-api/repos/*.json.gz")
     df2['created_at_alt'] = pd.to_datetime(df2['created_at_alt'])
     df2['updated_at'] = pd.to_datetime(df2['updated_at'], unit='s')
 
@@ -98,12 +61,12 @@ def merge_repository_data_sources():
     df['num_watchers'] = df['num_watchers'].fillna(0).astype(np.int)
 
     # Pre-sort so that most popular repositories come first
-    df.sort_values("num_events", ascending=False, inplace=True)
+    df.sort_values("num_stars", ascending=False, inplace=True)
 
     # Keep these fields and in this order
     fields = ['repo_id', 'name', 'owner', 'organization', 'language',
-              'description', 'num_events', 'num_unique', 'num_stars',
-              'num_forks', 'num_watchers', 'updated_at', 'created_at']
+              'description', 'homepage', 'num_stars', 'num_forks',
+              'num_watchers', 'updated_at', 'created_at']
 
     log.info("Saving...")
     df[fields].to_csv("data/csv/repositories.csv", index=False)
@@ -119,7 +82,8 @@ def get_github_api_results(path: str) -> pd.DataFrame:
 
     def homepage(url):
         if not url:
-            return None
+            return ''
+        url = url.strip()
         if 'http' not in url:
             return 'http://' + url
         return url
@@ -134,7 +98,7 @@ def get_github_api_results(path: str) -> pd.DataFrame:
         exists[content['full_name']] = True
         rv.append({
             'name': content['full_name'],
-            'homepage': homepage(content['homepage'].strip()),
+            'homepage': homepage(content['homepage']),
             'organization': to_org(content),
             'language': content['language'],
             'description': (content['description'] or "").replace("\n", ""),

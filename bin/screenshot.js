@@ -3,7 +3,7 @@ var url = args[1];
 var destination = args[2];
 
 if (args.length < 2) {
-    console.log('Usage: phantomjs screenshot.js URL DESTINATION')
+    console.log('Usage: phantomjs screenshot.js URL DESTINATION');
     phantom.exit(1);
 }
 
@@ -15,10 +15,9 @@ var page = require('webpage').create(),
     forcedRenderTimeout,
     renderTimeout;
 
-page.viewportSize = {
-  width: 1024,
-  height: 1536
-};
+//page.viewportSize = {width: 1366, height: 2049};
+page.viewportSize = {width: 1152, height: 768};
+page.settings.resourceTimeout = 30000;
 
 function render_screenshot() {
     page.render(destination);
@@ -44,6 +43,7 @@ page.open(url, function (status) {
         console.log('Unable to load url');
         phantom.exit();
     } else {
+        page.sendEvent('mousemove');
         forcedRenderTimeout = setTimeout(function () {
             render_screenshot();
         }, maxRenderWait);

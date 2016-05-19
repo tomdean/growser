@@ -1,8 +1,0 @@
-<div id="menu">
-    <ul class="nav nav-tabs">
-      <li role="presentation"{% if request.endpoint == 'repository' %} class="active"{% endif %}><a href="{{ url_for("repository", name=repo.name) }}">Recommendations</a></li>
-      <li role="presentation"{% if request.endpoint == 'rankings' %} class="active"{% endif %}><a href="{{ url_for("rankings", name=repo.name) }}">Rankings</a></li>
-      <li role="presentation"><a href="#">Compare</a></li>
-      <li role="presentation"><a href="https://github.com/{{repo.name}}">GitHub</a></li>
-    </ul>
-</div>

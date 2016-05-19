@@ -15,14 +15,15 @@ def configure(app):
 
 class DownloadFile(BaseJob):
     """Download a file from a Google Cloud Storage bucket to a local path."""
-    def run(self, bucket: str, obj: str, destination_path: str):
+    def run(self, bucket: str, obj: str, local_path: str):
         archive = self.api.objects.get_media(bucket=bucket, object=obj)
-        filename = os.path.join(destination_path, os.path.basename(obj))
+        filename = os.path.join(local_path, os.path.basename(obj))
         with FileIO(filename, 'wb') as fh:
             downloader = MediaIoBaseDownload(fh, archive, chunksize=1024*1024)
             complete = False
             while not complete:
                 _, complete = downloader.next_chunk()
+        return filename
 
 
 class DeleteFile(BaseJob):
@@ -37,8 +38,20 @@ class DeleteFile(BaseJob):
 
 
 class FindFilesMatchingPrefix(BaseJob):
-    """Return a list of all files matching"""
+    """Return a list of all files matching `prefix`."""
     def run(self, bucket: str, prefix: str):
         response = self.api.objects \
             .list(bucket=bucket, prefix=prefix).execute()
-        return [i for i in response['items'] if 'gz' in i['name']]
+        return [i for i in response['items'] if int(i['size']) > 0]
+
+
+class DownloadBucketPath(BaseJob):
+    """Download a Google Storage bucket to a local path."""
+    def run(self, bucket: str, bucket_path: str, local_path: str):
+        archives = FindFilesMatchingPrefix(self.api).run(bucket, bucket_path)
+        filenames = []
+        for file in archives:
+            filenames.append(DownloadFile(self.api).run(
+                bucket, file['name'], local_path))
+            DeleteFile(self.api).run(bucket, file['name'])
+        return filenames

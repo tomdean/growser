@@ -1,3 +1,4 @@
+from datetime import datetime
 import gzip
 
 from numba import njit
@@ -6,72 +7,65 @@ import pandas as pd
 
 from growser.app import log
 
-#: Maximum number of users to include in the user x repo matrix.
-MAX_LOGINS = 150000
-
-#: Max number of repositories to include in the user x repo matrix.
-MAX_REPOS = 10000
+#: Maximum number of users to include in the user/repo matrix.
+MAX_LOGINS = 100000
 
 
-def execute():
-    """Use the co-occurrence matrix of a user/item matrix to calculate the
-    log-likelihood & jaccard similarity for item/item pairs.
-
-    The Jaccard similarity is just an added bonus that happens to use the same
-    parameters as log likelihood."""
-    log.info("Loading ratings.csv")
-    ratings = pd.read_csv('data/csv/ratings.csv', header=None,
-                          names=['login_id', 'repo_id', 'rating', 'date'],
-                          usecols=['login_id', 'repo_id'])
-    ratings['value'] = 1
-
-    log.info("Filtering users & repositories")
-    top_users = ratings.groupby('login_id')['repo_id'].count() \
-        .sort_values(ascending=False)
-    top_users_filtered = top_users[(top_users >= 10) & (top_users <= 500)]
-    top_users_sample = top_users_filtered.sample(MAX_LOGINS)
-
-    top_repos = ratings[ratings['login_id'].isin(top_users_sample.index)] \
-        .groupby('repo_id')['login_id'].count() \
-        .sort_values(ascending=False)[:MAX_REPOS]
-
-    log.info("Filtering ratings")
-    rv = ratings[(ratings['login_id'].isin(top_users_sample.index)) &
-                 (ratings['repo_id'].isin(top_repos.index))]
-
-    log.info("Creating user x repo matrix")
-    df = rv.pivot(index='repo_id', columns='login_id', values='value').fillna(0)
-
-    del ratings
-    del rv
+def run_recommendations(ratings: str, output: str, num_repos: int):
+    ratings = fetch_ratings(ratings, None, num_repos)
 
     log.info("Creating co-occurrence matrix (A'A)")
-    coo = df.dot(df.T)
-
-    repos = top_repos.index[:20000]
-    num_users = df.shape[1]
-
-    def llr(a, b):
-        score = log_likelihood(
-            coo[a][b],
-            coo[b][b],
-            coo[a][a],
-            num_users - coo[a][a] - coo[b][b]
-        )
-        return 3, a, b, score
-
-    def jaccard(a, b):
-        score = jaccard_score(coo[a][a], coo[b][b], coo[a][b])
-        return 2, a, b, score
-
-    log.info("Jaccard similarity")
-    _recommendations(repos, coo, jaccard, 'co-occurrence.jaccard')
+    coo = ratings.dot(ratings.T)
 
     log.info("Log-likelihood similarity")
-    _recommendations(repos, coo, llr, 'co-occurrence.log-likelihood')
+    _recommendations(4, ratings.shape[1], ratings.index, coo, score_llr,
+                     'co-occurrence.log-likelihood')
+
+    log.info("Jaccard similarity")
+    _recommendations(6, ratings.shape[1], ratings.index, coo, score_jaccard,
+                     'co-occurrence.jaccard')
 
 
-def _recommendations(repos, coo, result, name):
+def fetch_ratings(filename: str, num_repos: int):
+    log.info("Loading %s", filename)
+    ratings = pd.read_csv(filename, header=None,
+                          names=['login_id', 'repo_id', 'rating', 'date'])
+    ratings['value'] = 1
+
+    log.info("Filtering ratings")
+    top_users = ratings.groupby('login_id')['repo_id'].count() \
+        .sort_values(ascending=False) \
+        .sample(MAX_LOGINS)
+
+    top_repos = ratings[ratings['login_id'].isin(top_users.index)] \
+        .groupby('repo_id')['login_id'].count() \
+        .sort_values(ascending=False)[:num_repos]
+
+    rv = ratings[(ratings['login_id'].isin(top_users.index)) &
+                 (ratings['repo_id'].isin(top_repos.index))]
+
+    log.info("Creating user/repo matrix")
+    df = rv.pivot(index='repo_id', columns='login_id', values='value').fillna(0)
+
+    return df
+
+
+def score_llr(coo, num_interactions, a, b):
+    score = log_likelihood(
+        coo[a][b],
+        coo[a][a] - coo[a][b],
+        coo[b][b] - coo[a][b],
+        num_interactions - coo[a][a] - coo[b][b] + coo[a][b]
+    )
+    return [a, b, score]
+
+
+def score_jaccard(coo, num_interactions, a, b):
+    score = jaccard_score(coo[a][a], coo[b][b], coo[a][b])
+    return [a, b, score]
+
+
+def _recommendations(model_id, num_interactions, repos, coo, result, name):
     """
     :param repos: List of repository IDs to generate recommendations for.
     :param coo: Co-occurrence matrix A'A where A is a user x item matrix.
@@ -80,8 +74,10 @@ def _recommendations(repos, coo, result, name):
     """
     results = []
     for idx, id1 in enumerate(repos):
-        scores = coo[id1][coo[id1] >= 5].index.map(lambda id2: result(id1, id2))
+        scores = coo[id1][coo[id1] >= 5].index.map(
+            lambda id2: [model_id] + result(coo, num_interactions, id1, id2))
         scores = sorted(scores, key=lambda x: x[3], reverse=True)
+        # Exclude first result (since it will be id1)
         results += scores[1:101]
         if idx > 0 and idx % 100 == 0:
             log.debug("Finished {}".format(idx))
@@ -117,17 +113,17 @@ def entropy(*args):
 
 
 @njit(nogil=True)
-def log_likelihood(k11, k01, k10, k00):
+def log_likelihood(k11, k12, k21, k22):
     """Based on the Mahout implementation at http://bit.ly/1NtLSrc.
 
     :param k11: Number of times the two events occurred together
-    :param k01: Number of times the second event occurred w/o the first event
-    :param k10: Number of times the first event occurred w/o the second event
-    :param k00: Number of times neither event occurred.
+    :param k12: Number of times the first event occurred w/o the second event
+    :param k21: Number of times the second event occurred w/o the first event
+    :param k22: Number of times neither event occurred.
     """
-    row_entropy = entropy(k11 + k01, k10 + k00)
-    col_entropy = entropy(k11 + k10, k01 + k00)
-    mat_entropy = entropy(k11, k01, k10, k00)
+    row_entropy = entropy(k11 + k12, k21 + k22)
+    col_entropy = entropy(k11 + k21, k12 + k22)
+    mat_entropy = entropy(k11, k12, k21, k22)
     if mat_entropy > row_entropy + col_entropy:
         return 0.0
     llr = 2.0 * (row_entropy + col_entropy - mat_entropy)

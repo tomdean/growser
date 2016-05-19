@@ -3,10 +3,11 @@ import datetime
 import gzip
 import time
 
-from psycopg2.extensions import cursor as pgcursor
+from psycopg2.extensions import cursor as pg_cursor
 
 from growser.app import log
 
+#: Number of rows to insert per batch transaction
 BATCH_SIZE = 50000
 
 
@@ -38,7 +39,7 @@ class BulkInsertList(object):
 
         def batches(data, batch_size) -> list:
             """Return batches of length `batch_size` from any object that
-            supports iteration without knowing length a priori."""
+            supports iteration without knowing length."""
             rv = []
             for idx, line in enumerate(data):
                 if idx != 0 and idx % batch_size == 0:
@@ -54,7 +55,7 @@ class BulkInsertList(object):
 
         for batch in batches(self.data, self.batch_size):
             start = time.time()
-            total += query.execute(conn, batch)
+            total += query.execute(conn, batch) or 0
             log.debug("%s rows inserted in %s seconds (%s total)",
                       len(batch), round(time.time() - start, 4), total)
 
@@ -114,10 +115,9 @@ class BulkInsertQuery(object):
         self.columns = columns
         self.query = "INSERT INTO {} ({}) VALUES ".format(
                 table.name, ", ".join(columns))
-        self.converters = None
 
     def execute(self, conn, rows: list) -> int:
-        """Execute a single multi-row INSERT against `values`.
+        """Execute a single multi-row INSERT for `rows`.
 
         :param conn: A :class:`psycopg2.extensions.connection` connection.
         :param rows: List of tuples in the same order as :attr:`columns`.
@@ -126,7 +126,7 @@ class BulkInsertQuery(object):
             return
 
         cursor = conn.cursor()
-        if not isinstance(cursor, pgcursor):
+        if not isinstance(cursor, pg_cursor):
             raise NotImplementedError("Only psycopg2 is currently supported")
 
         rows = self.escape_rows(cursor.mogrify, rows)
@@ -139,17 +139,19 @@ class BulkInsertQuery(object):
 
     def escape_rows(self, escape_func, rows: list):
         """Cast values to their expected python types and escape strings for
-        use in non-parameterized queries."""
-        if not self.converters:
-            def escape(value):
-                return escape_func('%s', (value,)).decode('UTF-8')
+        use in non-parameterized queries.
 
-            self.converters = self.to_python_types(escape)
+        :param escape_func: Function to escape string values.
+        :param rows: List of tuples to escape.
+        """
+        def escape(value):
+            return escape_func('%s', (value,)).decode('UTF-8')
+        converters = self.to_python_types(escape)
 
         def to_tuple(values):
             rv = []
             for column, value in zip(self.columns, values):
-                rv.append(self.converters[column](value))
+                rv.append(converters[column](value))
             return tuple(rv)
 
         for idx, row in enumerate(rows):
@@ -158,7 +160,8 @@ class BulkInsertQuery(object):
         return rows
 
     def to_python_types(self, escape_string) -> dict:
-        """Return a dict (name -> func) for casting to SQL-equivalent types."""
+        """Returns a dictionary mapping a column to a function for casting
+        values to SQL-compatible types."""
         rv = {}
 
         def to_str(val):

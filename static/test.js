@@ -1,45 +1,15 @@
-var RepositoryList = React.createClass({
-    getInitialState: function() {
-        return {data: {"results": [], "model": {"name": ""}}};
-    },
-    componentDidMount: function() {
-        $.ajax({
-            url: this.props.url,
-            dataType: 'json',
-            cache: false,
-            success: function(data) {
-                this.setState({data: data});
-            }.bind(this),
-            error: function(xhr, status, err) {
-                console.error(this.props.url, status, err.toString());
-            }.bind(this)
-        });
-    },
+var TableList = React.createClass({
     render: function() {
-        return (
-            <div>
-                <h4>{ this.state.data.model.name }</h4>
-                <RepositoryTable recommendations={this.state.data.results} />
-            </div>
-        );
-    }
-});
-
-var RepositoryTable = React.createClass({
-    getInitialState: function() {
-        return {data: {"recommendations": []}};
-    },
-    render: function() {
-        var list = this.props.recommendations.map(function(rec) {
-            return <RepositoryItem rec={rec} key={rec.repo.repo_id} />;
+        var list = this.props.results.map(function(rec) {
+            return <TableListItem repo={rec.repo} key={rec.repo.repo_id} />;
         });
         return (
-            <table className="table">
+            <table className="table table-striped">
                 <thead>
                 <tr>
                     <th>Name</th>
                     <th>Language</th>
-                    <th>Score</th>
+                    <th>Users</th>
                     <th>Description</th>
                 </tr>
                 </thead>
@@ -51,83 +21,84 @@ var RepositoryTable = React.createClass({
     }
 });
 
-var RepositoryItem = React.createClass({
+var TableListItem = React.createClass({
     render: function() {
-        var rec = this.props.rec;
-        var repo_url = "/r/" + rec.repo.name;
-        var lang_url = "/l/" + rec.repo.language;
-        var github_url = "https://github.com/" + rec.repo.name;
+        var repo= this.props.repo;
+        var lang_url = "/b/" + repo.language;
+        var num_events = parseInt(repo.num_events).toLocaleString()
+        var github_url = "https://github.com/" + repo.name
         return (
             <tr>
                 <td style={{minWidth: 350}}>
-                    <a href={github_url} className="octicon octicon-mark-github" target="_blank"></a> &nbsp;
-                    <a href={repo_url}>{rec.repo.name}</a>
+                    <a href={ github_url } className="gh_icon" target="_blank"><img src="/static/github.png" /></a>
+                    <a href={repo.url}>{repo.name}</a>
                 </td>
-                <td><a href={lang_url}>{rec.repo.language}</a></td>
-                <td className="small">{rec.score.toFixed(6)}</td>
-                <td className="small">{rec.repo.description}</td>
+                <td style={{whiteSpace:'nowrap'}}><a href={lang_url}>{repo.language}</a></td>
+                <td className="small">{num_events}</td>
+                <td className="small">{repo.description}</td>
             </tr>
-        );
-    }
-});
-
-var RepositoryImageGrid = React.createClass({
-    getInitialState: function() {
-        return {"results": []};
-    },
-    componentWillMount: function() {
-        $.getJSON(url, this.handleData);
-    },
-    handleData: function(data) {
-        this.setState(data);
-    },
-    render: function() {
-        return (
-            <div>
-                <h4>Recommendations</h4>
-                <GridList results={this.state.results} />
-            </div>
         );
     }
 });
 
 var GridList = React.createClass({
     getInitialState: function() {
-        return {data: {"results": [1,2,3]}};
+        return {data: {"results": [1, 2, 3]}};
     },
     render: function() {
         var list = this.props.results.map(function(rec) {
-            return <GridImage
-                        key={rec.repo.repo_id}
-                        src={rec.repo.image}
-                        title={rec.repo.name}
-                        url={rec.repo.url}
-                        github_url={rec.repo.github_url}
-                    />;
+            return <GridListItem key={rec.repo.repo_id} repo={rec.repo}/>;
         });
-        return (
-            <div>
-                {list}
-            </div>
-        );
+        return (<div id="repositories">{list}</div>);
     }
 });
 
-var GridImage = React.createClass({
+var GridListItem = React.createClass({
+    componentDidMount: function() {
+        $(function () {
+          $('[data-toggle="tooltip"]').tooltip()
+        })
+    },
     render: function() {
         return(
-            <div className="pull-left">
-                <a href={this.props.url} target="_blank">
-                    <img src={this.props.src} title={this.props.title} />
-                </a><br/>
-                {this.props.title}
+            <div className="repository">
+                <div className="title">
+                    <a href={this.props.repo.url}>{this.props.repo.name}</a><br/>
+                    {this.props.repo.last_release_at}
+                </div>
+                <a href={this.props.repo.url} className="repository-image" style={{backgroundImage: 'url(' + this.props.repo.image + ')' }} title={ this.props.repo.description } data-toggle="tooltip" data-placement="bottom"></a>
             </div>
         );
     }
 });
 
-// <RepositoryImageGrid url={url}/>, document.getElementById('repository-list')
-var url = "/api/v1/recommendations/" + model_id + "/" + repo_id;
+var Repositories = React.createClass({
+    getInitialState: function() {
+        return {"component": false, "results": []};
+    },
+    componentWillMount: function() {
+        $.getJSON(this.props.url, function(data) {this.setState(data)}.bind(this));
+    }, toggle: function() {
+        this.setState({component: !this.state.component});
+    },
+    render: function() {
+        var results = (this.state.component) ? <TableList results={this.state.results} />
+                                             : <GridList results={this.state.results} />;
+        return(
+            <div id="recommendations">
+                <div className="pull-right">
+                    View as &nbsp;
+                    <span className="glyphicon glyphicon-th-list" title="List" onClick={this.toggle}></span>&nbsp;
+                    <span className="glyphicon glyphicon-th" title="Images" onClick={this.toggle}></span>
+                </div>
+                <h4>Recommendations</h4>
+                {results}
+            </div>
+        );
+    }
+});
+
 ReactDOM.render(
-    <RepositoryList url={url} />, document.getElementById('repository-list')
+    <Repositories url={"/api/v1/recommendations/" + model_id + "/" + repo_id} />,
+    document.getElementById('repository-list')
 );

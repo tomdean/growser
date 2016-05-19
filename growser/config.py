@@ -1,12 +1,21 @@
 class DefaultConfig:
+    """Configuration values that do not change based on the environment"""
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     #: Modules that Celery will use for finding tasks
     CELERY_INCLUDE = (
         'growser.tasks.github',
         'growser.tasks.rankings',
-        'growser.tasks.screenshots'
+        'growser.tasks.screenshots',
+        'growser.tasks.daily',
+        'growser.tasks.commands'
     )
+
+    #: Restart Celery workers after it has processed this number of tasks
+    CELERYD_MAX_TASKS_PER_CHILD = 100
+
+    CELERY_TASK_SERIALIZER = 'pickle'
+    CELERY_RESULT_SERIALIZER = 'pickle'
 
 
 class BasicConfig(DefaultConfig):

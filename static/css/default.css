@@ -1,0 +1,129 @@
+/* Global */
+* { box-sizing: border-box; }
+body {
+    font-family: "Lato", "proxima-nova", "Helvetica Neue", Arial, sans-serif !important;
+    font-weight: normal;
+    overflow-x: hidden;
+}
+html, body { height: 100%; }
+
+a { color: #595959; }
+.site-header { line-height: 20px; font-size: 0px; }
+.site-header .brand { font-weight: 700; font-size: 15px; text-transform: none; }
+.site-header a { font-size: 14px; }
+.site-header nav a.active { color: #000; border-bottom: 3px solid #D33833 !important; padding-bottom: 5px; }
+.site-header nav a:hover { color: #000; border-bottom: 3px solid #49B5FA; padding-bottom: 5px; }
+
+.site-header i { margin-right: 3px; }
+.site-header nav { float: right; }
+
+.site-header .custom-toggle {
+    width: 34px;
+    height: 34px;
+    display: block;
+    position: absolute;
+    top: 0;
+    right: 0;
+    display: none;
+}
+
+@media (max-width: 38em) {
+    nav.with-icons i { font-size: 130%; }
+    nav.with-icons span { display: none; }
+}
+
+.container { max-width: 960px; margin: 0 auto; padding: 1em 0 0 1em; }
+
+.page-header {
+    transition: all .5s cubic-bezier(.35,0,.25,1);
+    transition-property: background-color,fill,color;
+    z-index: 3;
+    background: #303030 url(/static/img/bg2.png);
+    box-shadow: 0px 0px 1px 1px rgba(0, 0, 0, 0.14), 0px 0px 2px 2px rgba(0, 0, 0, 0.098), 0px 0px 5px 1px rgba(0, 0, 0, 0.084);
+    color: #fff;
+}
+
+.page-header-content { display: table; width: 100%; }
+.page-header .wrapper { display: table-cell }
+
+/* Repositories */
+
+.page-header h1 { font-size: 125%; margin: 0 0 5px 0; }
+.page-header h1 a { color: #FFD57A; text-decoration: none; }
+.page-header .description { font-size: 85%; margin-right: 10px; }
+.page-header .description a { color: #ccc; }
+
+.page-header nav { font-size: 0px; margin-top: 15px; margin-bottom: -4px; }
+.page-header nav a { font-size: 14px; padding: 0.75em 1em; color: #fff; font-weight: 200; }
+.page-header nav a:hover { background: none; color: #FFD57A; }
+
+.page-header nav .active { background: #fff; color: #000; border-radius: 2px 2px 0 0; border-top: 2px solid #D33833; }
+.page-header nav .active:hover { background: #fff; color: #000 !important; }
+
+.shields { margin-top: 10px; }
+
+.shield {
+    margin-right: 4px;
+    font-size: 12px;
+    color: #fff;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.shield a { text-decoration: none; color: #fff; }
+
+.shield .label {
+    padding: 4px 4px 4px 6px;
+    display: inline-block;
+    background-color: #535353;
+    border-radius: 2px 0 0 2px;
+}
+
+.shield .notice {
+    border-radius: 0 2px 2px 0;
+    background-color: #097ABA;
+    padding: 4px 6px 4px 4px;
+    display: inline-block;
+}
+
+.repo-languages {
+    display: table;
+    width: 100%;
+    white-space: nowrap;
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    border: 1px solid #ddd;
+}
+
+.repo-languages .language-color {
+    display: table-cell;
+    font-size: 67%;
+    overflow: hidden;
+}
+
+.language-color .txt {
+    margin: 0 3px;
+    overflow: hidden;
+    display: inline-block;
+    line-height: 24px;
+}
+
+.recommendations > div { margin-top: 25px; }
+.recommendations .title { width: 100%; font-size: 12px; white-space: nowrap; overflow: hidden; display: inline-block; }
+.recommendations .thumbnail {
+    max-width: 150px;
+    max-height: 100px;
+    overflow: hidden;
+    border: 1px solid #ccc;
+}
+.recommendations .thumbnail:hover { max-height: 135px; position: absolute; }
+.recommendations .thumbnail img { width: 100%; height: 100%; }
+.recommendations .stats { font-size: 11px; margin-top: 3px; }
+
+/* Override default styles */
+.pure-menu-active>.pure-menu-link, .pure-menu-link:hover, .pure-menu-link:focus {
+    background: none;
+}
