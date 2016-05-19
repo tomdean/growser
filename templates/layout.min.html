@@ -12,7 +12,7 @@ set tabs = [
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}Growser - GitHub Browser{% endblock %}</title>
+<title>{%- block title %}Growser - GitHub Browser{% endblock -%}</title>
 <meta name="description" content="{% block description %}{% endblock %}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/pure-min.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/grids-responsive-min.css') }}">
@@ -40,28 +40,17 @@ set tabs = [
 
 <div class="page-header">
     <div class="container">
-{% block header %}{% endblock %}
+{%- block header %}{% endblock %}
     </div>
 </div>
 
 <main class="page-content" role="main">
-{% block body %}{% endblock %}
+{%- block body %}{% endblock %}
 </main>
 
-<script src="{{ url_for("static", filename="js/jquery.min.js") }}" type="text/javascript"></script>
-{% block footer %}{% endblock %}
+    <script src="{{ url_for("static", filename="js/jquery.min.js") }}" type="text/javascript"></script>
+{%- block footer %}{% endblock %}
 
-{% if request.endpoint != "index" %}
-<style>
-footer { margin-top: 40px; background: #303030; }
-footer .info { padding: 30px 0; }
-</style>
-<footer>
-    <div class="container info">
-        footer
-    </div>
-</footer>
-{% endif %}
 
 </body>
 </html>
