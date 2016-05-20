@@ -11,7 +11,7 @@ def _client(service_name, version, account_name, private_key, scope):
     return build(service_name, version, http=auth.authorize(Http()))
 
 
-class BaseService(object):
+class BaseService:
     def __init__(self, project_id, client_key):
         self.project_id = project_id
 
@@ -63,7 +63,7 @@ class CloudStorageService(BaseService):
         return self.client.buckets()
 
 
-class BaseJob(object):
+class BaseJob:
     def __init__(self, api):
         self.api = api
         self.project_id = self.api.project_id

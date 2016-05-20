@@ -5,8 +5,6 @@ class DefaultConfig:
     #: Modules that Celery will use for finding tasks
     CELERY_INCLUDE = (
         'growser.tasks.github',
-        'growser.tasks.rankings',
-        'growser.tasks.screenshots',
         'growser.tasks.daily',
         'growser.tasks.commands'
     )
@@ -16,6 +14,12 @@ class DefaultConfig:
 
     CELERY_TASK_SERIALIZER = 'pickle'
     CELERY_RESULT_SERIALIZER = 'pickle'
+
+    CMDR_HANDLERS = (
+        'growser.handlers.media',
+        'growser.handlers.rankings',
+        'growser.handlers.recommendations'
+    )
 
 
 class BasicConfig(DefaultConfig):

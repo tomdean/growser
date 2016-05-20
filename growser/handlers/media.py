@@ -54,7 +54,11 @@ readme_re = \
 
 
 class UpdateRepositoryMediaHandler(Handles[UpdateRepositoryMedia]):
-    def handle(self, cmd: UpdateRepositoryMedia):
+    def handle(self, cmd: UpdateRepositoryMedia) -> DomainEvent:
+        """Update the screenshots for the GitHub readme & project homepage.
+
+        @todo: This is more like a "command coordinator" or CQRS saga.
+        """
         from growser.models import Repository
 
         repo = Repository.query.filter(Repository.name == cmd.name).first()
@@ -71,17 +75,17 @@ class UpdateRepositoryMediaHandler(Handles[UpdateRepositoryMedia]):
             return False
 
         def image_path(f, h, p, e):
-            return "static/github/{folder}/{hashid}.{page}.{ext}".format(
-                    hashid=h, page=p, folder=f, ext=e)
+            return "static/github/{folder}/{hashid}.{page}.{ext}" \
+                .format(hashid=h, page=p, folder=f, ext=e)
 
         for name, url in urls:
             destination = image_path("fs", repo.hashid, name, "png")
             yield UpdateRepositoryScreenshot(repo.name, url, destination)
 
-            for folder, dimensions in THUMBNAIL_DIMENSIONS:
+            for folder, size in THUMBNAIL_DIMENSIONS:
                 source = image_path(folder, repo.hashid, name, "jpg")
                 yield CreateResizedScreenshot(
-                    repo.name, dimensions, destination, source)
+                    repo.name, size, destination, source)
 
             yield OptimizeImage(repo.name, destination)
 
@@ -102,31 +106,34 @@ class UpdateRepositoryMediaHandler(Handles[UpdateRepositoryMedia]):
 
 
 class UpdateRepositoryScreenshotHandler(Handles[UpdateRepositoryScreenshot]):
-    def handle(self, command: UpdateRepositoryScreenshot):
-        existed = os.path.exists(command.destination)
-        subprocess.call(PHANTOM_JS_CMD + [command.url, command.destination])
+    def handle(self, cmd: UpdateRepositoryScreenshot):
+        """Invokes the PhantomJS binary to render a URLs' screenshot."""
+        existed = os.path.exists(cmd.destination)
+        subprocess.call(PHANTOM_JS_CMD + [cmd.url, cmd.destination])
         klass = ImageUpdated if existed else ImageCreated
-        yield klass(command.name, command.destination)
+        yield klass(cmd.name, cmd.destination)
 
 
 class CreateResizedScreenshotHandler(Handles[CreateResizedScreenshot]):
-    def handle(self, command: CreateResizedScreenshot):
-        img = Image.open(command.source)
+    def handle(self, cmd: CreateResizedScreenshot) -> ImageCreated:
+        img = Image.open(cmd.source)
         if img.mode == 'P':
             img = img.convert("RGB")
 
-        height = math.ceil(command.size[0] * img.size[1] / img.size[0])
-        img = img.resize((command.size[0], height), Image.ANTIALIAS)
+        height = math.ceil(cmd.size[0] * img.size[1] / img.size[0])
+        img = img.resize((cmd.size[0], height), Image.ANTIALIAS)
 
-        bg = Image.new("RGB", command.size, (255, 255, 255))
+        bg = Image.new("RGB", cmd.size, (255, 255, 255))
         bg.paste(img, (0, 0), img)
-        bg.save(command.destination, "JPEG", optimize=True, quality=95)
+        bg.save(cmd.destination, "JPEG", optimize=True, quality=95)
 
-        yield ImageCreated(command.name, command.destination)
+        yield ImageCreated(cmd.name, cmd.destination)
 
 
 class OptimizeImageHandler(Handles[OptimizeImage]):
-    def handle(self, cmd: OptimizeImage):
+    def handle(self, cmd: OptimizeImage) -> ImageOptimized:
+        """Rather than dispose of the full-size screenshots, reduce their
+        color palette to 256 colors and file size by ~70%."""
         if 'png' not in cmd.source:
             return False
 
@@ -144,7 +151,8 @@ class OptimizeImageHandler(Handles[OptimizeImage]):
 
 
 class CreateHeaderCollageHandler(Handles[CreateHeaderCollage]):
-    def handle(self, cmd: CreateHeaderCollage):
+    def handle(self, cmd: CreateHeaderCollage) -> HeaderCollageCreated:
+        """Create a grid of screenshots to use for the homepage."""
         images = self._get_resized_thumbnails(cmd)
 
         width, height = images[0].size[0], images[0].size[1]

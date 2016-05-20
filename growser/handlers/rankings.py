@@ -27,18 +27,21 @@ class RankingsUpdated(DomainEvent):
 
 class UpdateRankingsHandler(Handles[UpdateRankings]):
     def weekly(self, cmd: UpdateWeeklyRankings):
+        """Set the time window for the rankings to the prior week."""
         if not cmd.end_date:
             cmd.end_date = date.today() - timedelta(days=1)
         cmd.start_date = cmd.end_date - timedelta(days=7)
         return self.handle(cmd)
 
     def monthly(self, cmd: UpdateMonthlyRankings):
+        """Set the time window for the rankings to the prior month."""
         if not cmd.end_date:
             cmd.end_date = date.today() - timedelta(days=1)
         cmd.start_date = cmd.end_date - timedelta(days=30)
         return self.handle(cmd)
 
     def recent(self, cmd: UpdateRecentRankings):
+        """Set the time window for the rankings to the prior 90 days."""
         if not cmd.end_date:
             cmd.end_date = date.today() - timedelta(days=1)
         cmd.start_date = cmd.end_date - timedelta(days=90)
@@ -50,7 +53,8 @@ class UpdateRankingsHandler(Handles[UpdateRankings]):
         cmd.start_date = date(2012, 3, 1)
         return self.handle(cmd)
 
-    def handle(self, cmd: UpdateRankings):
+    def handle(self, cmd: UpdateRankings) -> RankingsUpdated:
+        """Update project rankings"""
         if not cmd.language:
             raise ValueError("Language must not be empty")
         if cmd.start_date and cmd.start_date > cmd.end_date:
@@ -83,7 +87,7 @@ class UpdateRankingsHandler(Handles[UpdateRankings]):
 
     @staticmethod
     def _query_database_num_ratings(cmd: UpdateRankings):
-        """@todo Extract to an aggregate root and inject via repository"""
+        """@todo Extract to an aggregate"""
         count = func.COUNT(Rating.repo_id)
         query = db.session.query(Rating.repo_id, count.label("num_events")) \
             .join(Repository, Repository.repo_id == Rating.repo_id) \

@@ -105,4 +105,3 @@ class CreateHeaderCollage(Command):
         self.num_repos = num_repos
         self.thumbnail_sizes = thumbnail_sizes
         self.header_sizes = header_sizes
-

@@ -11,7 +11,7 @@ from growser.app import log
 BATCH_SIZE = 50000
 
 
-class BulkInsertList(object):
+class BulkInsertList:
     """Bulk insert into Postgres/MySQL using multi-row INSERT support."""
 
     def __init__(self, table, data, columns: list, batch_size: int=BATCH_SIZE):
@@ -62,6 +62,8 @@ class BulkInsertList(object):
         log.info("Copied %s rows in %s seconds",
                  total, round(time.time() - first_start, 2))
 
+        return total
+
 
 class BulkInsertCSV(BulkInsertList):
     """Bulk Insert from a CSV file into a database table.
@@ -108,7 +110,7 @@ class BulkInsertCSV(BulkInsertList):
                 self.__class__, self.table, self.filename)
 
 
-class BulkInsertQuery(object):
+class BulkInsertQuery:
     """Execute a multi-row INSERT statement."""
     def __init__(self, table, columns: list):
         self.table = table
