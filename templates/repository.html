@@ -8,10 +8,7 @@
 
 {% block body %}
     <div class="container">
-
-        <a href="{{ url_for('admin.update_media', name=ctx.repo.name) }}"><i class="fa fa-image"></i> Media</a>
-        <a href=""><i class="fa fa-github"></i> GitHub</a>
-
+        <a href="{{ url_for('admin.update_media', name=ctx.repo.name) }}">update</a>
         <div class="recommendations pure-g">
         {%- for rec in ctx.recommendations %}
             <div class="recommendation pure-u-1-3 pure-u-sm-1-4 pure-u-md-1-5 pure-u-lg-1-6" title="{{ rec.repository.description }}">
