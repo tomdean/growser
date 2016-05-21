@@ -1,10 +1,10 @@
+import importlib
+
 from growser.cmdr import CommandHandlerManager, LocalCommandBus
 
 
 def configure(app):
-    from growser.handlers import media, rankings
-
     handlers = CommandHandlerManager()
-    handlers.register(media)
-    handlers.register(rankings)
+    for module in app.config.get('CMDR_HANDLERS'):
+        handlers.register(importlib.import_module(module))
     return LocalCommandBus(handlers)
