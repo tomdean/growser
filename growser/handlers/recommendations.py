@@ -2,8 +2,8 @@ from collections import namedtuple
 from os.path import abspath, join
 import subprocess
 
-from growser.app import db
-from growser.db import BulkInsertCSV
+from growser.app import db, log
+from growser.db import from_csv, from_sqlalchemy_table
 from growser.models import Recommendation
 
 from growser.cmdr import DomainEvent, Handles
@@ -52,6 +52,7 @@ class ExecuteMahoutRecommenderHandler(Handles[ExecuteMahoutRecommender]):
         source = abspath(join(RATINGS_PATH, model.source))
         destination = abspath(join(EXPORT_PATH, model.destination))
 
+        log.info('Running Mahout')
         run = ["mvn", "exec:java", "-DbatchSize=100",
                "-DmodelID={}".format(model.id),
                "-Dsrc=" + source,
@@ -62,7 +63,10 @@ class ExecuteMahoutRecommenderHandler(Handles[ExecuteMahoutRecommender]):
             Recommendation.model_id == model.id).delete()
 
         columns = ['model_id', 'repo_id', 'recommended_repo_id', 'score']
-        batch = BulkInsertCSV(Recommendation, destination, columns, False)
-        num_results = batch.execute(db.engine)
+        batch = from_sqlalchemy_table(
+            Recommendation.__table__, from_csv(destination), columns)
 
-        return RecommendationsUpdated(model.id, num_results)
+        for rows in batch.batch_execute(db.engine.raw_connection):
+            log.info("Batch complete: {}".format(rows))
+
+        return RecommendationsUpdated(model.id, batch)

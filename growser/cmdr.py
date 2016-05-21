@@ -1,4 +1,3 @@
-import collections
 from inspect import getmembers
 import sys
 from types import FunctionType, GeneratorType, ModuleType

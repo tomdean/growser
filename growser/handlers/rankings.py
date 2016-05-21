@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import func
 
 from growser.app import db
-from growser.db import BulkInsertList
+from growser.db import from_sqlalchemy_table
 from growser.commands.rankings import (
     UpdateRankings,
     UpdateAllTimeRankings,
@@ -78,9 +78,9 @@ class UpdateRankingsHandler(Handles[UpdateRankings]):
             .filter(Ranking.period == cmd.period)
         query.delete()
 
-        ranked = df.to_records(False)
-        batch = BulkInsertList(Ranking.__table__, ranked, list(df.columns))
-        batch.execute(db.engine)
+        data = iter(df.to_records(False))
+        batch = from_sqlalchemy_table(Ranking.__table__, data, list(df.columns))
+        batch.execute(db.engine.raw_connection)
 
         yield RankingsUpdated(
             cmd.period, cmd.start_date, cmd.end_date, cmd.language)
