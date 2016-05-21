@@ -1,8 +1,12 @@
 __pycache__/
+.cache
+.coverage
 *.py[cod]
 htmlcov/
 .DS_Store
 .idea/
 /data/
 static/github/
+static/emoji/
 docs/
+static/img/wall*
