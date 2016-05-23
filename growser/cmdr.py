@@ -179,7 +179,6 @@ class CommandHandlerManager:
             def handles(cmd):
 
         :param obj: Function to register as a handler.
-        :return: List of `Invokable`'s.
         """
         if type(obj) != FunctionType:
             raise TypeError('Expected FunctionType')
@@ -193,7 +192,8 @@ class CommandHandlerManager:
         rv = []
         # Method type hints e.g. def name(command: Type)
         for param, param_type in obj.__annotations__.items():
-            rv.append((param_type, Callable(klass, obj)))
+            if issubclass(param_type, Command) and param != 'return':
+                rv.append((param_type, Callable(klass, obj)))
 
         # Decorators using @handles(CommandType)
         if hasattr(handles, 'handlers') and obj in handles.handlers:
@@ -203,6 +203,9 @@ class CommandHandlerManager:
             self._add(command, handler)
 
         return rv
+
+    def __iter__(self):
+        yield from self.handlers.items()
 
 
 class LocalCommandBus:
