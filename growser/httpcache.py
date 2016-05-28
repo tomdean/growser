@@ -24,7 +24,7 @@ def get(url, params=None, expiry=86400, **kwargs):
 
 
 def _url_to_path(url, params=None):
-    """Returns a filesystem-friendly string given a URL & GET parameters."""
+    """Returns a filesystem-friendly string from a URL."""
     parts = urlparse(url)
     domain = parts.netloc
     if domain[0:4] == 'www.':

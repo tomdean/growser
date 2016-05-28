@@ -1,9 +1,11 @@
 from collections import namedtuple
+import csv
+import gzip
 from os.path import abspath, join
 import subprocess
 
 from growser.app import db, log
-from growser.db import from_csv, from_sqlalchemy_table
+from growser.db import from_sqlalchemy_table
 from growser.models import Recommendation
 
 from growser.cmdr import DomainEvent, Handles
@@ -46,7 +48,6 @@ class ExportRatingsToCSVHandler(Handles[ExportRatingsToCSV]):
 
 class ExecuteMahoutRecommenderHandler(Handles[ExecuteMahoutRecommender]):
     def handle(self, cmd: ExecuteMahoutRecommender):
-        """Execute Mahout recommender."""
         model = MODELS.get(cmd.model)
 
         source = abspath(join(RATINGS_PATH, model.source))
@@ -70,3 +71,8 @@ class ExecuteMahoutRecommenderHandler(Handles[ExecuteMahoutRecommender]):
             log.info("Batch complete: {}".format(rows))
 
         return RecommendationsUpdated(model.id, batch)
+
+
+def from_csv(path):
+    file = gzip.open(path, 'rt') if path.endswith('gz') else open(path, 'rt')
+    return csv.reader(file)

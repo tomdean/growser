@@ -1,5 +1,4 @@
-import calendar
-from datetime import date, timedelta
+from datetime import date
 
 from growser.cmdr import Command
 
@@ -81,26 +80,3 @@ class UpdateWeeklyRankings(UpdateRankings):
         .. seealso:: :class:`UpdateRecentRankings`
         """
         super().__init__(RankingPeriod.Week, language, limit)
-
-
-def to_first_day_of_week(for_date):
-    """Return the first day of the week (Sunday) relative to `for_date`."""
-    days = for_date.isoweekday()
-    if days != 7:
-        return for_date - timedelta(days=days)
-    return for_date
-
-
-def weekly_interval(start_date: date, end_date: date):
-    start_date = to_first_day_of_week(start_date)
-    while end_date > start_date:
-        yield start_date
-        start_date += timedelta(days=7)
-
-
-def monthly_interval(start_date: date, end_date: date):
-    start_date = start_date.replace(day=1)
-    while end_date > start_date:
-        yield start_date
-        days = calendar.monthrange(start_date.year, start_date.month)[1]
-        start_date += timedelta(days=days)

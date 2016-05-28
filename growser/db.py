@@ -12,7 +12,7 @@ BATCH_SIZE = 50000
 
 
 class Column:
-    def __init__(self, name, python_type):
+    def __init__(self, name: str, python_type: type):
         """Wrapper to cast Python values for use in ad-hoc SQL.
 
         Example::
@@ -55,7 +55,7 @@ class ColumnCollection(OrderedDict):
 class BulkInsertFromIterator:
     def __init__(self, table, data: Iterator, columns: list,
                  batch_size: int=BATCH_SIZE, header: bool=False):
-        """Bulk insert into Postgres via multi-row INSERT.
+        """Bulk insert into Postgres from an iterator in fixed-size batches.
 
         Example::
 
@@ -70,7 +70,7 @@ class BulkInsertFromIterator:
         :param data: Iterable containing the data to insert.
         :param columns: List of :class:`Column` objects.
         :param batch_size: Rows to insert per batch.
-        :param header: True if the first row is a header
+        :param header: True if the first row is a header.
         """
         self.table = table
         self.data = data
@@ -119,12 +119,16 @@ class BulkInsertFromIterator:
             yield total
 
     def execute(self, conn):
+        """Execute all batches."""
         return max(list(self.batch_execute(conn)))
 
 
 class BulkInsertQuery:
     def __init__(self, table: str, columns: ColumnCollection):
         """Execute a multi-row INSERT statement.
+
+        This does not take advantage of parameterized queries, but escapes
+        string values manually in :class:`Column`.
 
         :param table: Name of the table being inserted into.
         :param columns: Columns required for type coercion.
@@ -173,29 +177,6 @@ class BulkInsertQuery:
 
         return rows
 
-
-def to_dict_model(self) -> dict:
-    """Returns a single model instance as a dictionary."""
-    return dict((key, getattr(self, key)) for key in self.__mapper__.c.keys())
-
-
-def to_dict_query(self) -> list:
-    """Returns all rows in a query as dictionaries."""
-    return [row.to_dict() for row in self.all()]
-
-
-class SQLAlchemyAutoCommit(SQLAlchemy):
-    """By default ``psycopg2`` will wrap SELECT statements in a transaction.
-
-    This can be avoided using AUTOCOMMIT to rely on Postgres' default
-    implicit transaction mode (see this `blog post <http://bit.ly/1N0a7Lj>`_
-    for more details).
-    """
-    def apply_driver_hacks(self, app, info, options):
-        super().apply_driver_hacks(app, info, options)
-        options['isolation_level'] = 'AUTOCOMMIT'
-
-
 def from_sqlalchemy_table(table: Table, data: Iterator, columns: list,
                           batch_size: int=BATCH_SIZE, header: bool=False):
     """Return a :class:`BulkInsertFromIterator` based on the metadata
@@ -234,3 +215,25 @@ def as_columns(columns) -> List[Column]:
         if isinstance(column, str):
             rv.append(Column(column, str))
     return rv
+
+
+def to_dict_model(self) -> dict:
+    """Returns a single SQLAlchemy model instance as a dictionary."""
+    return dict((key, getattr(self, key)) for key in self.__mapper__.c.keys())
+
+
+def to_dict_query(self) -> list:
+    """Returns all SQLAlchemy records in a query as dictionaries."""
+    return [row.to_dict() for row in self.all()]
+
+
+class SQLAlchemyAutoCommit(SQLAlchemy):
+    """By default ``psycopg2`` will wrap SELECT statements in a transaction.
+
+    This can be avoided using AUTOCOMMIT to rely on Postgres' default
+    implicit transaction mode (see this `blog post <http://bit.ly/1N0a7Lj>`_
+    for more details).
+    """
+    def apply_driver_hacks(self, app, info, options):
+        super().apply_driver_hacks(app, info, options)
+        options['isolation_level'] = 'AUTOCOMMIT'

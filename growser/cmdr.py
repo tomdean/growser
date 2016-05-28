@@ -1,7 +1,6 @@
 from inspect import getmembers
-import sys
 from types import FunctionType, GeneratorType, ModuleType
-from typing import Generic, TypeVar
+from typing import Callable, Generic, TypeVar
 
 
 class Message:
@@ -44,6 +43,7 @@ class Handles(Generic[T]):
 
 def handles_decorator():
     handlers = {}
+
     def wrapper(command):
         def inner(func):
             handlers[func] = command
@@ -56,32 +56,37 @@ def handles_decorator():
 handles = handles_decorator()
 
 
-class Callable:
-    """Wrapper for a class method handler."""
-    def __init__(self, klass: type, func):
+class Handler:
+    """Intermediary between a function/method and the executing context."""
+    def __init__(self, klass: type, func: Callable):
         self.klass = klass
         self.func = func
 
-    def handler(self):
+    def __call__(self):
         func = self.func
         if self.klass:
             func = getattr(self.klass(), self.func.__name__)
         return func
 
     def __repr__(self):
-        return "<Callable {}>".format(self.func.__qualname__)
+        return "Handler<{} {}>".format(
+            self.klass.__name__, self.func.__qualname__)
 
 
-class CommandHandlerInvoker:
-    def __init__(self, command_type: type, handler):
-        """Manages the execution of a command by a command handler."""
-        self.command_type = command_type
+class HandlerInvoker:
+    def __init__(self, klass: type, handler: Callable[..., FunctionType]):
+        """Intermediary between the executing command bus and handler.
+
+        :param klass: Type of class that is being executed
+        :param handler: Callable that executes instance of this type
+        """
+        self.klass = klass
         self.handler = handler
 
     def execute(self, command: Command):
         """Execute the command using the registered command handler.
 
-        :param command: An instance of :attr:`command_type`.
+        :param command: An instance of :attr:`klass`.
         """
         results = self.handler(command)
         if isinstance(results, GeneratorType):
@@ -89,62 +94,56 @@ class CommandHandlerInvoker:
         return results
 
     def __repr__(self):
-        return 'CommandHandlerInvoker({}, {})'.format(
-            self.command_type.__name__, self.handler)
+        return '<{} {} {}>'.format(
+            self.__class__.__name__, self.klass.__name__, self.handler)
 
 
-class CommandHandlerManager:
+class HandlerRegistry:
     def __init__(self):
         self.handlers = {}
 
-    def find(self, klass: type) -> Callable:
-        """Return the handler assigned to `command`."""
+    def find(self, klass: type) -> Handler:
+        """Return the handler assigned to `klass`."""
         return self.handlers.get(klass, None)
 
-    def _add(self, command: type, handler: Callable):
-        """Register a command and its associated handler.
-
-        :param command: Command type
-        :param handler: Handler callable
-        """
-        if issubclass(command, Command) and command in self.handlers:
-            raise DuplicateHandlerError(command, handler)
-        self.handlers[command] = handler
-
     def register(self, obj):
-        """Register a module, class, or function as a command handler.
+        """Register a module, class, or function as a handler.
 
-        :param obj: Object to register as a command handler.
+        :param obj: Object to register as a handler.
         """
+        handlers = []
         if type(obj) == ModuleType:
-            return self.add_module(obj)
+            handlers = self._scan_module(obj)
         if type(obj) == FunctionType:
-            return self.add_function(obj)
+            handlers = self._scan_function(obj)
         if isinstance(obj, type):
-            return self.add_class(obj)
-        raise TypeError('Invalid command handler type')
+            handlers = self._scan_class(obj)
 
-    def add_module(self, module: ModuleType):
-        """Register all command handlers in a module.
+        for klass, handler in handlers:
+            if issubclass(klass, Command) and klass in self.handlers:
+                raise DuplicateHandlerError(klass, handler)
+            self.handlers[klass] = handler
 
-        :param module: Module containing classes or functions as handlers.
-        """
+        if not len(handlers):
+            raise TypeError('Invalid command handler type')
+
+    def _scan_module(self, module: ModuleType):
+        """Scan a module for handlers."""
         if type(module) != ModuleType:
             raise TypeError('Module required')
+
+        rv = []
         for obj in getmembers(module):
             if isinstance(obj[1], type) and issubclass(obj[1], Handles):
-                self.add_class(obj[1])
+                rv += self._scan_class(obj[1])
             if type(obj[1]) == FunctionType:
-                self.add_function(obj[1])
+                rv += self._scan_function(obj[1])
+        return rv
 
-    def add_class(self, klass: type):
-        """Register all command handlers found on a class.
-
-        :param klass: Object containing callables that can be registered
-                      as command handlers.
-        """
+    def _scan_class(self, klass: type):
+        """Scan a class for handlers."""
         if not isinstance(klass, type):
-            raise TypeError('Class required')
+            raise TypeError('Class type required')
 
         # Commands via : Handles[T]
         expected = []
@@ -155,9 +154,14 @@ class CommandHandlerManager:
         def is_func(f):
             return type(f) == FunctionType and f.__name__[0] != '_'
 
+        funcs = []
         rv = []
         for func in [obj[1] for obj in getmembers(klass) if is_func(obj[1])]:
-            rv += self.add_function(func, klass)
+            funcs.append((func, klass))
+            rv += self._scan_function(func, klass)
+
+        # If a callable hasn't been found but the class only has a single
+        # method with a single argument, use that as a fallback.
 
         # Handlers declared by the class but not found
         commands = [cmd[0] for cmd in rv]
@@ -165,17 +169,19 @@ class CommandHandlerManager:
         if len(missing):
             raise UnboundCommandError(missing)
 
-    def add_function(self, obj, klass=None) -> list:
-        """Register a function or unbound class method as a command handler.
+        return rv
 
-        The command bound to the function is determined by either the presence
+    def _scan_function(self, obj, klass: type=None):
+        """Register a function or unbound class method as a handler.
+
+        The class bound to the function is determined by either the presence
         of a type hint::
 
-            def handles(cmd: CommandClass):
+            def handles(cmd: Klass):
 
         Or a decorator::
 
-            @handles(CommandClass)
+            @handles(Klass)
             def handles(cmd):
 
         :param obj: Function to register as a handler.
@@ -183,24 +189,15 @@ class CommandHandlerManager:
         if type(obj) != FunctionType:
             raise TypeError('Expected FunctionType')
 
-        # Class method
-        name = obj.__qualname__.split('.')
-        if not klass and len(name) > 1 and '<locals>' not in name:
-            klass = getattr(sys.modules[obj.__module__], name[-2])
-            obj = getattr(klass, name[-1])
-
         rv = []
         # Method type hints e.g. def name(command: Type)
         for param, param_type in obj.__annotations__.items():
             if issubclass(param_type, Command) and param != 'return':
-                rv.append((param_type, Callable(klass, obj)))
+                rv.append((param_type, Handler(klass, obj)))
 
         # Decorators using @handles(CommandType)
         if hasattr(handles, 'handlers') and obj in handles.handlers:
-            rv.append((handles.handlers[obj], Callable(klass, obj)))
-
-        for command, handler in rv:
-            self._add(command, handler)
+            rv.append((handles.handlers[obj], Handler(klass, obj)))
 
         return rv
 
@@ -209,11 +206,12 @@ class CommandHandlerManager:
 
 
 class LocalCommandBus:
-    def __init__(self, handlers: CommandHandlerManager):
-        self.handlers = handlers
+    def __init__(self, registry: HandlerRegistry):
+        self.registry = registry
 
-    def execute(self, command: Command):
-        handler = self.handlers.find(command.__class__)
-        invoker = CommandHandlerInvoker(command.__class__, handler.handler())
-        rv = invoker.execute(command)
-        return rv
+    def execute(self, cmd: Command):
+        handler = self.registry.find(cmd.__class__)
+        if not handler:
+            raise LookupError('No handler found for {}'.format(cmd.__class__))
+        invoker = HandlerInvoker(handler.klass, handler())
+        return invoker.execute(cmd)

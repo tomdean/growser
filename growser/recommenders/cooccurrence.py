@@ -1,4 +1,3 @@
-from datetime import datetime
 import gzip
 
 from numba import njit
@@ -12,7 +11,7 @@ MAX_LOGINS = 100000
 
 
 def run_recommendations(ratings: str, output: str, num_repos: int):
-    ratings = fetch_ratings(ratings, None, num_repos)
+    ratings = fetch_ratings(ratings, num_repos)
 
     log.info("Creating co-occurrence matrix (A'A)")
     coo = ratings.dot(ratings.T)
