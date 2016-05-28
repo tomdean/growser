@@ -1,10 +1,10 @@
 from collections import OrderedDict
-import csv
 import datetime
-import gzip
-from typing import Iterator
+from typing import Iterator, List
 
+from flask_sqlalchemy import SQLAlchemy
 from psycopg2.extensions import QuotedString
+from sqlalchemy import Table
 
 
 #: Number of rows to insert per batch transaction
@@ -12,12 +12,21 @@ BATCH_SIZE = 50000
 
 
 class Column:
-    """Converts a python value for use in ad-hoc SQL execution."""
     def __init__(self, name, python_type):
+        """Wrapper to cast Python values for use in ad-hoc SQL.
+
+        Example::
+
+            columns = [Column('id', int), Column('amount', float)]
+
+        :param name: Name of the column.
+        :param python_type: Python type e.g. int, str, float.
+        """
         self.name = name
         self.python_type = python_type
 
-    def cast(self, value):
+    def escape(self, value) -> str:
+        """Escape a value for use in a Postgres ad-hoc SQL statement."""
         def to_str(val):
             if isinstance(val, bytes):
                 val = val.decode('utf-8')
@@ -30,6 +39,9 @@ class Column:
             func = to_str
         return func(value)
 
+    def __eq__(self, b):
+        return self.name == b.name and self.python_type == b.python_type
+
     def __repr__(self):
         return '{}<name={}, type={}>'.format(
             self.__class__.__name__, self.name, self.python_type.__name__)
@@ -41,10 +53,18 @@ class ColumnCollection(OrderedDict):
 
 
 class BulkInsertFromIterator:
-    def __init__(self, table, data: Iterator, columns,
+    def __init__(self, table, data: Iterator, columns: list,
                  batch_size: int=BATCH_SIZE, header: bool=False):
-        """
-        Bulk insert into Postgres/MySQL using multi-row INSERT support.
+        """Bulk insert into Postgres via multi-row INSERT.
+
+        Example::
+
+            bulk = BulkInsertFromIterator(
+                'table.name',
+                iter([[1, 'Python'], [2, 'PyPy', 3]]),
+                [Column('id', int), Column('name', str)]
+            )
+            bulk.execute(db.engine.raw_connection)
 
         :param table: Name of the table.
         :param data: Iterable containing the data to insert.
@@ -145,7 +165,7 @@ class BulkInsertQuery:
         def to_tuple(values):
             rv = []
             for column, value in zip(self.columns, values):
-                rv.append(self.columns.get(column).cast(value))
+                rv.append(self.columns.get(column).escape(value))
             return tuple(rv)
 
         for idx, row in enumerate(rows):
@@ -154,10 +174,45 @@ class BulkInsertQuery:
         return rows
 
 
-def from_sqlalchemy_table(table, data, columns, batch_size: int=BATCH_SIZE):
-    import os
-    from sqlalchemy import Table
+def to_dict_model(self) -> dict:
+    """Returns a single model instance as a dictionary."""
+    return dict((key, getattr(self, key)) for key in self.__mapper__.c.keys())
 
+
+def to_dict_query(self) -> list:
+    """Returns all rows in a query as dictionaries."""
+    return [row.to_dict() for row in self.all()]
+
+
+class SQLAlchemyAutoCommit(SQLAlchemy):
+    """By default ``psycopg2`` will wrap SELECT statements in a transaction.
+
+    This can be avoided using AUTOCOMMIT to rely on Postgres' default
+    implicit transaction mode (see this `blog post <http://bit.ly/1N0a7Lj>`_
+    for more details).
+    """
+    def apply_driver_hacks(self, app, info, options):
+        super().apply_driver_hacks(app, info, options)
+        options['isolation_level'] = 'AUTOCOMMIT'
+
+
+def from_sqlalchemy_table(table: Table, data: Iterator, columns: list,
+                          batch_size: int=BATCH_SIZE, header: bool=False):
+    """Return a :class:`BulkInsertFromIterator` based on the metadata
+    of a SQLAlchemy table.
+
+    Example::
+
+        batch = from_sqlalchemy_table(
+            Rating.__table__,
+            data,
+            ['rating_id', 'repo_id', 'login_id', 'rating']
+        )
+
+    :param table: A :class:`sqlalchemy.Table` instance.
+    :param data: An iterator.
+    :param columns: List of column names to use.
+    """
     if not isinstance(table, Table):
         raise TypeError('Expected sqlalchemy.Table, got {}'.format(table))
 
@@ -166,12 +221,16 @@ def from_sqlalchemy_table(table, data, columns, batch_size: int=BATCH_SIZE):
         column = table.columns.get(name)
         wrapped.append(Column(str(column.name), column.type.python_type))
 
-    if isinstance(data, str) and os.path.exists(data):
-        data = from_csv(data)
-
-    return BulkInsertFromIterator(table, data, wrapped, batch_size)
+    return BulkInsertFromIterator(table, data, wrapped, batch_size, header)
 
 
-def from_csv(path):  # pragma: no cover
-    file = gzip.open(path, 'rt') if path.endswith('gz') else open(path, 'rt')
-    return csv.reader(file)
+def as_columns(columns) -> List[Column]:
+    rv = []
+    for column in columns:
+        if isinstance(column, Column):
+            rv.append(column)
+        if isinstance(column, tuple):
+            rv.append(Column(*column))
+        if isinstance(column, str):
+            rv.append(Column(column, str))
+    return rv
