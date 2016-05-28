@@ -38,7 +38,24 @@ T = TypeVar('T')
 
 
 class Handles(Generic[T]):
-    """Indicates that a class handles instances of command type `T`."""
+    """Indicates that a class handles instances of command type `T`.
+
+    Example::
+
+        class SingleCommandHandler(Handles[SingleCommand]):
+            def handle(cmd: SingleCommand):
+                pass
+
+    Classes can also handle multiple commands::
+
+        class MultiHandler(Handles[FirstCommand],
+                           Handles[SecondCommand]):
+            def handle_first(cmd: FirstCommand):
+                pass
+
+            def handle_second(cmd: SecondCommand:)
+                pass
+    """
 
 
 def handles_decorator():
@@ -57,7 +74,11 @@ handles = handles_decorator()
 
 
 class Handler:
-    """Intermediary between a function/method and the executing context."""
+    """A single callable used as a handler.
+
+    :param klass: Class the `func` is expecting.
+    :param func: Callable responsible for handling instances of `klass.
+    """
     def __init__(self, klass: type, func: Callable):
         self.klass = klass
         self.func = func

@@ -1,4 +1,3 @@
-from collections import namedtuple
 import datetime
 import hashlib
 
@@ -6,10 +5,6 @@ from sqlalchemy.orm import relationship
 from sqlalchemy import (Column, Date, DateTime, Float, Integer,
                         SmallInteger, String, Text, or_)
 from growser.app import db
-
-
-Image = namedtuple('Image', ['path'])
-ImageSet = namedtuple('ImageSet', ['small', 'medium', 'large'])
 
 
 class Repository(db.Model):

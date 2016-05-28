@@ -5,14 +5,13 @@ import uuid
 
 from apiclient.errors import HttpError
 
-from growser.services.bigquery import _table
-from growser.services.bigquery import DeleteTable
-from growser.services.bigquery import ExecuteAsyncQuery
-from growser.services.bigquery import ExecuteQuery
-from growser.services.bigquery import ExportTableToCSV
-from growser.services.bigquery import FetchQueryResults
-from growser.services.bigquery import PersistQueryToTable
-from growser.services.bigquery import QueryResult
+from growser.google import _table
+from growser.google import DeleteTable
+from growser.google import ExecuteAsyncQuery
+from growser.google import ExecuteQuery
+from growser.google import ExportTableToCSV
+from growser.google import PersistQueryToTable
+from growser.google import QueryResult
 
 
 PROJECT_ID = "test_project_id"

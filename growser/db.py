@@ -177,6 +177,7 @@ class BulkInsertQuery:
 
         return rows
 
+
 def from_sqlalchemy_table(table: Table, data: Iterator, columns: list,
                           batch_size: int=BATCH_SIZE, header: bool=False):
     """Return a :class:`BulkInsertFromIterator` based on the metadata

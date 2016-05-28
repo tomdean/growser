@@ -29,18 +29,20 @@ class UpdateRepositoryScreenshot(Command):
     :param url: URL to screenshot
     :param destination: Local path to save the image
     """
-    def __init__(self, name: int, url: str, destination: str):
+    def __init__(self, name: str, url: str, destination: str):
         self.name = name
         self.url = url
         self.destination = destination
 
 
 class CreateResizedScreenshot(Command):
-    """Resize a screenshot based on :attr:`~size`.
+    """Resize a screenshot.
 
     Example::
 
-        CreateResizedScreenshot("pydata/pandas", (400, 600)
+        CreateResizedScreenshot(
+            "pydata/pandas",
+            (400, 600),
             "static/github/fs/37be0d5d4911.hp.png",
             "static/github/md/37be0d5d4911.hp.jpg"
         )
@@ -82,26 +84,41 @@ class CreateHeaderCollage(Command):
 
     Example::
 
-        cmd = CreatePageHeaderHomepageCollage(
-            "static/github/md",
+        cmd = CreateHeaderCollageHandler(
+            "data/csv/collage.csv",
             "static/img/bg.50.png",
-            10000,
             (50, 50),
             (1200, 300)
         )
 
-    :param path: Path to the folder containing the images (screenshots) to use
-                 when creating the header.
+    :param path: Path to a file containing a list of files to be used.
     :param destination: Path to save the header.
-    :param num_repos: Filter images to only repos in the top-N.
     :param thumbnail_sizes: The max width/height when resizing thumbnails.
     :param header_sizes: The max width/height for the header.
-
     """
-    def __init__(self, path: str, destination: str, num_repos: int,
-                 thumbnail_sizes: tuple, header_sizes: tuple):
+    def __init__(self, path: str, destination: str,  thumbnail_sizes: tuple,
+                 header_sizes: tuple):
         self.path = path
         self.destination = destination
-        self.num_repos = num_repos
         self.thumbnail_sizes = thumbnail_sizes
         self.header_sizes = header_sizes
+
+
+class CalculateImageComplexityScores(Command):
+    """Calculate a complexity score of all images in a folder, and save the
+    results to a CSV file::
+
+        cmd = CalculateImageComplexityScores(
+            "static/github/md/",
+            "data/csv/screenshots.csv",
+            ".hp."
+        )
+
+    :param path: Directory of images to calculate scores for.
+    :param destination: File to save results to.
+    :param pattern: Only include files that contain this value.
+    """
+    def __init__(self, path: str, destination: str, pattern: str=None):
+        self.path = path
+        self.destination = destination
+        self.pattern = pattern

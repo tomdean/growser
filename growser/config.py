@@ -5,8 +5,7 @@ class DefaultConfig:
     #: Modules that Celery will use for finding tasks
     CELERY_INCLUDE = (
         'growser.tasks.github',
-        'growser.tasks.daily',
-        'growser.tasks.commands'
+        'growser.tasks'
     )
 
     #: Restart Celery workers after it has processed this number of tasks
@@ -16,6 +15,7 @@ class DefaultConfig:
     CELERY_RESULT_SERIALIZER = 'pickle'
 
     CMDR_HANDLERS = (
+        'growser.handlers.events',
         'growser.handlers.media',
         'growser.handlers.rankings',
         'growser.handlers.recommendations'

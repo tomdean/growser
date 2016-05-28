@@ -1,7 +1,6 @@
 from collections import Sized
 from io import FileIO
 from itertools import chain
-import json
 import os
 
 from apiclient.discovery import build
@@ -17,27 +16,30 @@ def _client(service_name, version, account_name, private_key, scope):
 
 
 class BaseService:
-    def __init__(self, project_id, client_key):
+    """Authentication required for all Google API services."""
+    def __init__(self, project_id, account_name, private_key):
         self.project_id = project_id
-
-        with open(client_key) as fh:
-            content = json.loads(fh.read())
-
-        self.account_name = content['client_email']
-        self.private_key = bytes(content['private_key'], 'UTF-8')
+        self.account_name = account_name
+        self.private_key = private_key
+        self.service_name = None
+        self.version = None
+        self.scope = None
         self._client = None
-
-
-class BigQueryService(BaseService):
-    """Wrapper over google-api-client for working with BigQuery."""
 
     @property
     def client(self):
         if self._client is None:
-            self._client = _client(
-                    'bigquery', 'v2', self.account_name, self.private_key,
-                    'https://www.googleapis.com/auth/bigquery')
+            self._client = _client(self.service_name, self.version,
+                                   self.account_name, self.private_key,
+                                   self.scope)
         return self._client
+
+
+class BigQueryService(BaseService):
+    """Wrapper over google-api-client for working with BigQuery."""
+    service_name = 'bigquery'
+    version = 'v2'
+    scope = 'https://www.googleapis.com/auth/bigquery'
 
     @property
     def jobs(self):
@@ -50,14 +52,9 @@ class BigQueryService(BaseService):
 
 class CloudStorageService(BaseService):
     """Wrapper over google-api-client for working with Cloud Storage."""
-
-    @property
-    def client(self):
-        if self._client is None:
-            self._client = _client(
-                    'storage', 'v1', self.account_name, self.private_key,
-                    'https://www.googleapis.com/auth/devstorage.full_control')
-        return self._client
+    service_name = 'storage'
+    version = 'v1'
+    scope = 'https://www.googleapis.com/auth/devstorage.full_control'
 
     @property
     def objects(self):
@@ -137,13 +134,14 @@ class ExecuteAsyncQuery(BigQueryJob):
 
 class FetchQueryResults(BigQueryJob):
     def run(self, job_id: str):
-        """Fetch the results of a query stored on BigQuery."""
+        """Fetch all results from a query stored on BigQuery."""
         self.id = job_id
         if not self.is_complete:
             raise JobNotCompleteException('Job is not complete')
-        return QueryResult(self.pages())
+        return QueryResult(self._pages())
 
-    def pages(self):
+    def _pages(self):
+        """Return all pages of results for the query."""
         kwargs = {'jobId': self.id}
         has_token = True
         while has_token:
@@ -243,7 +241,7 @@ class GoogleStorageJob(BaseJob):
     """Base for any job that runs against Google Cloud Storage."""
 
 
-class DownloadFile(BaseJob):
+class DownloadFile(GoogleStorageJob):
     """Download a file from a Google Cloud Storage bucket to a local path."""
     def run(self, bucket: str, obj: str, local_path: str):
         archive = self.api.objects.get_media(bucket=bucket, object=obj)
@@ -256,7 +254,7 @@ class DownloadFile(BaseJob):
         return filename
 
 
-class DeleteFile(BaseJob):
+class DeleteFile(GoogleStorageJob):
     """Delete a file from a Google Cloud Storage bucket"""
     def run(self, bucket: str, obj: str):
         try:
@@ -267,7 +265,7 @@ class DeleteFile(BaseJob):
             return False
 
 
-class FindFilesMatchingPrefix(BaseJob):
+class FindFilesMatchingPrefix(GoogleStorageJob):
     """Return a list of all files matching `prefix`."""
     def run(self, bucket: str, prefix: str):
         response = self.api.objects \
@@ -275,7 +273,7 @@ class FindFilesMatchingPrefix(BaseJob):
         return [i for i in response['items'] if int(i['size']) > 0]
 
 
-class DownloadBucketPath(BaseJob):
+class DownloadBucketPath(GoogleStorageJob):
     """Download a Google Storage bucket to a local path."""
     def run(self, bucket: str, bucket_path: str, local_path: str):
         archives = FindFilesMatchingPrefix(self.api).run(bucket, bucket_path)

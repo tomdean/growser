@@ -1,6 +1,5 @@
 import json
 import random
-import re
 
 import responses
 import unittest
@@ -36,26 +35,3 @@ class GithubAPITestCase(unittest.TestCase):
         result = json.loads(github.rate_limit().decode("UTF-8"))
         self.assertEqual(responses.calls[0].request.url, url)
         self.assertEqual(result['resources']['core']['remaining'], core)
-
-    @responses.activate
-    def test_stargazers(self):
-        url = re.compile(self.base_url + "/repos/twbs/bootstrap/stargazers")
-        body = b'[{"login": "twbs", "id": 77083}]'
-        responses.add(responses.GET, url, body, content_type='application/json')
-        response = github.stargazers("twbs", "bootstrap")
-        self.assertEqual(response, body)
-
-    @responses.activate
-    def test_search(self):
-        url = re.compile(self.base_url + "/search/repositories")
-        body = '{"total_count":19225,"incomplete_results":false,"items":[{"id":843222,"name":"scikit-learn","full_name":"scikit-learn/scikit-learn"}]}'
-
-        responses.add(responses.GET, url, body, content_type='application/json')
-
-        page = random.randint(1, 5)
-        per_page = random.randint(50, 100)
-        github.search('repositories', 'machine learning',
-                      page=page, per_page=per_page)
-
-        assert "per_page={}".format(per_page) in responses.calls[0].request.url
-        assert "page={}".format(page) in responses.calls[0].request.url

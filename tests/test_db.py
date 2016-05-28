@@ -1,4 +1,3 @@
-import csv
 from datetime import datetime
 import math
 import random
@@ -6,15 +5,15 @@ import unittest
 from unittest.mock import MagicMock
 
 from psycopg2.extensions import connection, cursor
-from sqlalchemy import Table, Column as SAColumn, Integer, String, MetaData
+from sqlalchemy import Column as SAColumn, Integer, MetaData, String, Table
 
 from growser.db import (
-    Column,
     BulkInsertFromIterator,
     BulkInsertQuery,
+    Column,
     ColumnCollection,
     from_sqlalchemy_table,
-    from_csv
+    as_columns
 )
 
 #: Columns for our take table
@@ -35,10 +34,8 @@ TestTable = Table(
 
 #: Mock connection & cursor object
 def get_mock_connection():
-    mock_cursor = MagicMock(spec=cursor)
-    mock_cursor.mogrify = lambda x: x
     mock_connection = MagicMock(spec=connection)
-    mock_connection.cursor = lambda: mock_cursor
+    mock_connection.cursor = lambda: MagicMock(spec=cursor)
     return mock_connection
 
 
@@ -55,24 +52,41 @@ class ColumnTests(unittest.TestCase):
     def test_casts_datetime(self):
         value = datetime(2016, 1, 1, 0, 0, 0)
         column = Column('name', datetime)
-        assert column.cast(value) == "'{}'".format(str(value))
+        assert column.escape(value) == "'{}'".format(str(value))
 
     def test_int(self):
         column = Column('id', int)
-        assert column.cast('22') == 22
+        assert column.escape('22') == 22
 
     def test_escaped_values(self):
         column = Column('id', str)
         value = "test 'escaped' string"
-        assert column.cast(value) == "'test ''escaped'' string'"
+        assert column.escape(value) == "'test ''escaped'' string'"
 
         value = 'test "double quotes"'
-        assert column.cast(value) == "'{}'".format(value)
+        assert column.escape(value) == "'{}'".format(value)
 
     def test_bytes(self):
         column = Column('id', str)
         value = b'bytes string'
-        assert column.cast(value) == "'bytes string'"
+        assert column.escape(value) == "'bytes string'"
+
+    def test_eq(self):
+        column1 = Column('id', str)
+        column2 = Column('id', str)
+        column3 = Column('id', int)
+        assert column1 == column2
+        assert column1 != column3
+
+
+class ColumnCollectionTests(unittest.TestCase):
+    def test_eq(self):
+        assert columns_c == columns_c
+        assert ColumnCollection(columns_t) == columns_c
+
+    def test_neq(self):
+        cols = ColumnCollection([Column('id', int), Column('name', str)])
+        assert cols != columns_c
 
 
 class BulkInsertQueryTests(unittest.TestCase):
@@ -151,3 +165,23 @@ class BulkInsertFromIteratorTests(unittest.TestCase):
             batches.append(batch)
 
         assert len(batches) == batches_expected
+
+
+def test_as_columns_using_tuples():
+    cols = [('id', int), ('name', str), ('description', str)]
+    assert as_columns(cols) == columns_t
+
+
+def test_as_columns_with_defaults():
+    cols = ['id', 'name', 'description']
+    for col in as_columns(cols):
+        assert col.python_type == str
+
+
+def test_as_columns_with_columns():
+    assert as_columns(columns_t) == columns_t
+
+
+def test_as_columns_mixed():
+    mixed = [('id', int), 'name', Column('description', str)]
+    assert as_columns(mixed) == columns_t

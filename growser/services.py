@@ -1,5 +1,6 @@
 import importlib
 import logging.config
+import ujson as json
 
 from celery import Celery
 
@@ -9,15 +10,22 @@ from growser.google import BigQueryService, CloudStorageService
 
 
 def bigquery(app):
-    return BigQueryService(app.config.get('GOOGLE_PROJECT_ID'),
-                           app.config.get('GOOGLE_CLIENT_KEY'))
+    return __google_service(app, BigQueryService)
 
 
 def storage(app):
-    return CloudStorageService(
-        app.config.get('GOOGLE_PROJECT_ID'),
-        app.config.get('GOOGLE_CLIENT_KEY')
-    )
+    return __google_service(app, CloudStorageService)
+
+
+def __google_service(app, klass):
+    with open(app.config.get('GOOGLE_CLIENT_KEY')) as fh:
+        config = json.loads(fh.read())
+
+    project_id = app.config.get('GOOGLE_PROJECT_ID')
+    account = config['client_email']
+    private_key = bytes(config['private_key'], 'UTF-8')
+
+    return klass(project_id, account, private_key)
 
 
 def celery(app):
