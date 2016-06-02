@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+from collections import namedtuple
+import inspect
+from itertools import groupby
+
+import click
+from click import echo
+
+from growser.app import app
+from growser.services import commands as configure
+
+
+@click.group()
+def cmdrcli():
+    pass
+
+
+@cmdrcli.group('list', help='List commands, queries, handlers, events')
+def listing():
+    pass
+
+
+@listing.command('commands')
+@click.option('-f', '--filter', help='Filter based on this value')
+@click.option('-e', '--expand', is_flag=True)
+def list_commands(filter, expand):
+    bus = configure(app)
+
+    rv = [(cmd.__module__, cmd)
+          for cmd, handler in bus.registry
+          if not filter or filter.lower() in str(cmd).lower()]
+
+    # Sort by module & class name
+    rv = sorted(rv, key=lambda x: (x[0], x[1].__name__))
+
+    def getdoc(o):
+        """Return the first line of a docstring."""
+        if hasattr('o', '__init__') and o.__init__.__doc__:
+            return inspect.getdoc(o.__init__).split('\n')[0]
+        return inspect.getdoc(o).split('\n')[0]
+
+    _module = namedtuple('module', ['name', 'commands'])
+    _command = namedtuple('command', ['name', 'doc'])
+
+    modules = []
+    for name, commands in groupby(rv, lambda x: x[0]):
+        module = _module(name, [])
+        for cmd in commands:
+            module.commands.append(_command(cmd[1].__name__, getdoc(cmd[1])))
+        modules.append(module)
+
+    def _print_summary():
+        sizes = (max([len(m) for m, c in modules]) + 2,
+                 max([len(str(len(c))) for m, c in modules]) + 2)
+
+        header = 'Module'.ljust(sizes[0]) + '#'.rjust(sizes[1])
+        echo(header)
+        echo(''.join(['-'] * sizes[0] + [' '] + ['-'] * sizes[1]))
+
+        for name, cmds in modules:
+            echo(name.ljust(sizes[0]) + str(len(cmds)).rjust(sizes[1]))
+            if expand:
+                for cmd in cmds:
+                    echo('- {}'.format(cmd.name))
+        echo('')
+
+    _print_summary()
+
+
+@listing.command('queries')
+@click.option('--text')
+def list_queries():
+    pass
+
+
+@listing.command('handlers')
+@click.option('--text')
+def list_handlers():
+    pass
+
+
+@listing.command('events')
+@click.option('--text')
+def list_events():
+    pass
+
+
+@cmdrcli.command('execute', help='Execute a command')
+@click.argument('command')
+@click.argument('args', nargs=-1)
+def execute(command: str, args: tuple):
+    import importlib
+    from growser.app import app
+    from growser.services import commands
+
+    command = command.rpartition('.')
+
+    try:
+        module = importlib.import_module(command[0])
+    except ImportError:
+        return echo('Could not find module %s' % command[0])
+
+    try:
+        klass = getattr(module, command[2])
+    except AttributeError:
+        return echo('Could not find command %s' % command[2])
+
+    def type_arg(arg):
+        arg = arg.strip()
+        if arg.isdigit():
+            return int(arg)
+        try:
+            return float(arg)
+        except:
+            return arg
+
+    cleaned_args = []
+    for arg in args:
+        if arg[0] in ('(', '[') and arg[-1] in (')', ']'):
+            arg = tuple(map(type_arg, arg[1:-1].split(',')))
+        cleaned_args.append(arg)
+
+    bus = commands(app)
+    bus.execute(klass(*cleaned_args))
+
+
+if __name__ == '__main__':
+    cmdrcli()
