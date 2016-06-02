@@ -17,13 +17,14 @@ def _client(service_name, version, account_name, private_key, scope):
 
 class BaseService:
     """Authentication required for all Google API services."""
+    service_name = None
+    version = None
+    scope = None
+
     def __init__(self, project_id, account_name, private_key):
         self.project_id = project_id
         self.account_name = account_name
         self.private_key = private_key
-        self.service_name = None
-        self.version = None
-        self.scope = None
         self._client = None
 
     @property

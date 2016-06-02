@@ -4,7 +4,7 @@ import random
 import responses
 import unittest
 
-from growser.tasks import github
+from growser.tasks_old import github
 
 
 class GithubAPITestCase(unittest.TestCase):

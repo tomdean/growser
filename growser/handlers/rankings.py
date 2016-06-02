@@ -5,7 +5,7 @@ import pandas as pd
 from sqlalchemy import func
 
 from growser.app import db
-from growser.db import from_sqlalchemy_table
+from growser.cmdr import Handles, DomainEvent
 from growser.commands.rankings import (
     UpdateRankings,
     UpdateAllTimeRankings,
@@ -13,7 +13,7 @@ from growser.commands.rankings import (
     UpdateMonthlyRankings,
     UpdateRecentRankings
 )
-from growser.cmdr import Handles, DomainEvent
+from growser.db import from_sqlalchemy_table
 from growser.models import Ranking, Rating, Repository
 
 
@@ -96,7 +96,6 @@ class UpdateRankingsHandler(Handles[UpdateRankings]):
 
         if cmd.language != "All":
             query = query.filter(Repository.language == cmd.language)
-
         if cmd.start_date:
             query = query.filter(Rating.created_at >= cmd.start_date)
         if cmd.end_date:

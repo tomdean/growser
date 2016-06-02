@@ -4,14 +4,8 @@ import re
 
 from flask import render_template, request
 
-from growser.api import blueprint as  api
-from growser.admin import blueprint as admin
 from growser.app import app
 from growser.models import Language, Ranking, RankingPeriod, Release, Repository
-
-
-app.register_blueprint(api, url_prefix="/api")
-app.register_blueprint(admin, url_prefix="/admin")
 
 
 @app.route("/")
@@ -44,28 +38,14 @@ def repository(name: str):
         .order_by(Release.created_at) \
         .all()
 
-    from collections import Counter
     from growser.models import Recommendation
 
     recommendations = Recommendation.find_by_repository(3, repo.repo_id, 100)
-
-    langs = Counter([rec.repository.language for rec in recommendations if rec.repository.language])
-    languages = []
-    if len(langs):
-        repos = langs.most_common(10)
-        total = sum([_[1] for _ in repos])
-        repos.append(('Other', len(recommendations) - total))
-        repos = sorted(repos, key=lambda x: x[1], reverse=True)
-        languages = [(x[0], x[1], round(x[1] / len(recommendations) * 100, 1)) for x in repos]
-
-    colors = get_colors()
 
     return render("repository.html",
                   repo=repo,
                   releases=releases,
                   recommendations=recommendations,
-                  languages=languages,
-                  colors=colors,
                   ranks=ranks)
 
 
@@ -111,13 +91,13 @@ def browse(language: str=None):
     for_date = request.args.get('d', None)
     language = language or "All"
 
-    period_id = {None: 4, 'm': 3, 'w': 2, 'a': 1}.get(period)
+    period_id = {None: 4, 'm': 2, 'w': 3, 'a': 1}.get(period)
 
     per_page = 100
     offset = 0 if page == 1 else (page-1) * per_page
 
     if not for_date:
-        for_date = date.today() - timedelta(days=2)
+        for_date = date.today() - timedelta(days=1)
 
     query = Ranking.query \
         .filter(Ranking.end_date == for_date) \
@@ -126,7 +106,8 @@ def browse(language: str=None):
         .order_by(Ranking.rank)
 
     result = query.limit(per_page).offset(offset).all()
-    return render("language.html", rankings=result, language=language, period=period)
+    return render("language.html", rankings=result, language=language,
+                  period=period)
 
 
 @app.route('/releases')

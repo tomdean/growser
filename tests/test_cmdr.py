@@ -3,7 +3,7 @@ import unittest
 
 from growser.cmdr import (
     Command,
-    HandlerRegistry,
+    Registry,
     DomainEvent,
     DuplicateHandlerError,
     handles,
@@ -11,7 +11,10 @@ from growser.cmdr import (
     Handler,
     HandlerInvoker,
     LocalCommandBus,
-    UnboundCommandError
+    UnboundCommandError,
+    scan_class,
+    scan_module,
+    scan_function
 )
 
 
@@ -42,35 +45,35 @@ class HandlerRegistryTestCase(unittest.TestCase):
     def test_can_add_func_with_type_hint(self):
         def handler(cmd: FakeCommand):
             pass
-        manager = HandlerRegistry()
-        manager.register(handler)
+        manager = Registry()
+        manager.scan(handler)
         assert manager.find(FakeCommand).func == handler
 
     def test_can_add_func_with_decorator(self):
         @handles(FakeCommand)
         def handler(cmd):
             pass
-        manager = HandlerRegistry()
-        manager.register(handler)
+        manager = Registry()
+        manager.scan(handler)
         assert manager.find(FakeCommand).func == handler
 
     def test_invalid_function_fails(self):
         def handler(cmd):
             pass
-        manager = HandlerRegistry()
+        manager = Registry()
         with self.assertRaises(TypeError):
-            manager.register(handler)
+            manager.scan(handler)
 
     def test_can_add_class_method_with_type_hint(self):
-        manager = HandlerRegistry()
-        manager.register(FakeCommandHandler.handle)
+        manager = Registry()
+        manager.scan(FakeCommandHandler.handle)
 
         assert manager.find(FakeCommand).func == FakeCommandHandler.handle
 
     def test_cannot_add_invalid_callable(self):
-        manager = HandlerRegistry()
+        manager = Registry()
         with self.assertRaises(TypeError):
-            manager.register("not a valid callable")
+            manager.scan("not a valid callable")
 
     def test_cannot_add_class_with_multiple_handlers(self):
         class FakeCommandHandlerMultipleHandlers(Handles[FakeCommand]):
@@ -80,14 +83,14 @@ class HandlerRegistryTestCase(unittest.TestCase):
             def handle2(self, cmd: FakeCommand):
                 pass
 
-        manager = HandlerRegistry()
+        manager = Registry()
         with self.assertRaises(DuplicateHandlerError):
-            manager.register(FakeCommandHandlerMultipleHandlers)
+            manager.scan(FakeCommandHandlerMultipleHandlers)
 
     def test_cannot_add_class_with_non_class(self):
-        manager = HandlerRegistry()
+        manager = Registry()
         with self.assertRaises(TypeError):
-            manager.register(lambda x: x)
+            manager.scan(lambda x: x)
 
     def test_can_add_class_with_decorator(self):
         class FakeCommandHandler(Handles[FakeCommand]):
@@ -95,8 +98,8 @@ class HandlerRegistryTestCase(unittest.TestCase):
             def handle(self, cmd):
                 pass
 
-        manager = HandlerRegistry()
-        manager.register(FakeCommandHandler)
+        manager = Registry()
+        manager.scan(FakeCommandHandler)
         assert manager.find(FakeCommand).func == FakeCommandHandler.handle
 
     def test_can_add_class_with_type_hint(self):
@@ -104,17 +107,17 @@ class HandlerRegistryTestCase(unittest.TestCase):
             def handle(self, cmd: FakeCommand):
                 pass
 
-        manager = HandlerRegistry()
-        manager.register(FakeCommandHandler)
+        manager = Registry()
+        manager.scan(FakeCommandHandler)
         assert manager.find(FakeCommand).func == FakeCommandHandler.handle
 
     def test_cannot_add_class_bound_without_handler(self):
         class FakeCommandHandler(Handles[FakeCommand]):
             pass
 
-        manager = HandlerRegistry()
+        manager = Registry()
         with self.assertRaises(UnboundCommandError):
-            manager.register(FakeCommandHandler)
+            manager.scan(FakeCommandHandler)
 
     def test_can_add_class_with_multiple_handlers(self):
         class FakeCommandHandler(Handles[FakeCommand], Handles[FakeCommand2]):
@@ -124,8 +127,8 @@ class HandlerRegistryTestCase(unittest.TestCase):
             def handle2(self, cmd: FakeCommand2):
                 pass
 
-        manager = HandlerRegistry()
-        manager.register(FakeCommandHandler)
+        manager = Registry()
+        manager.scan(FakeCommandHandler)
 
         assert manager.find(FakeCommand).func == FakeCommandHandler.handle1
         assert manager.find(FakeCommand2).func == FakeCommandHandler.handle2
@@ -133,26 +136,25 @@ class HandlerRegistryTestCase(unittest.TestCase):
     def test_can_add_module(self):
         import sys
 
-        manager = HandlerRegistry()
-        manager.register(sys.modules[__name__])
+        manager = Registry()
+        manager.scan(sys.modules[__name__])
 
         assert manager.find(FakeCommand).func == FakeCommandHandler.handle
         assert manager.find(FakeCommand2).func == FakeCommand2Handler.handle
 
     def test_failures(self):
-        manager = HandlerRegistry()
         with self.assertRaises(TypeError):
-            manager._scan_class(lambda x: x)
+            scan_class(lambda x: x)
         with self.assertRaises(TypeError):
-            manager._scan_module(lambda x: x)
+            scan_module(lambda x: x)
         with self.assertRaises(TypeError):
-            manager._scan_function(22)
+            scan_function(22)
 
     def test_iter(self):
-        manager = HandlerRegistry()
-        manager.register(FakeCommandHandler)
+        manager = Registry()
+        manager.scan(FakeCommandHandler)
         assert len(list(manager)) == 1
-        manager.register(FakeCommand2Handler)
+        manager.scan(FakeCommand2Handler)
         assert len(list(manager)) == 2
 
 
@@ -198,13 +200,13 @@ class CallableTests(unittest.TestCase):
 
 class LocalCommandBusTests(unittest.TestCase):
     def test_execute(self):
-        manager = HandlerRegistry()
-        manager.register(FakeCommandHandler)
+        manager = Registry()
+        manager.scan(FakeCommandHandler)
         bus = LocalCommandBus(manager)
         assert isinstance(bus.execute(FakeCommand()), FakeEvent)
 
     def test_fails_no_handler(self):
-        manager = HandlerRegistry()
+        manager = Registry()
         bus = LocalCommandBus(manager)
         with self.assertRaises(LookupError):
             bus.execute("test")

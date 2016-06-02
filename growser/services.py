@@ -3,9 +3,10 @@ import logging.config
 import ujson as json
 
 from celery import Celery
+from flask_sqlalchemy import BaseQuery
 
 from growser.db import SQLAlchemyAutoCommit, to_dict_model, to_dict_query
-from growser.cmdr import HandlerRegistry, LocalCommandBus
+from growser.cmdr import Registry, LocalCommandBus
 from growser.google import BigQueryService, CloudStorageService
 
 
@@ -42,15 +43,13 @@ def log(app, cfg=None):
 
 
 def commands(app):
-    handlers = HandlerRegistry()
+    handlers = Registry()
     for module in app.config.get('CMDR_HANDLERS'):
-        handlers.register(importlib.import_module(module))
+        handlers.scan(importlib.import_module(module))
     return LocalCommandBus(handlers)
 
 
 def sqlalchemy(app):
-    from flask_sqlalchemy import BaseQuery
-
     db = SQLAlchemyAutoCommit(app)
     db.Model.to_dict = to_dict_model
     BaseQuery.to_dict = to_dict_query

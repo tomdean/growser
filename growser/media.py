@@ -1,16 +1,14 @@
 from io import BytesIO
-from PIL import Image, ImageFilter
-import os
+from PIL import Image
 
 import numpy as np
+from skimage.filters import sobel_h, sobel_v
 
 
-def get_compressed_size(image: Image, quality: int=95):
-    """Compress an image and determine its file size using JPEG compression.
+def get_compressed_size(image: Image, quality) -> float:
+    """Find the size of an image after JPEG compression.
 
-    JPEG compression provides a decent estimate of the complexity of an image.
-
-    :param image: Image to return compressed size for.
+    :param image: Image to compress.
     :param quality: JPEG compression quality (1-100).
     """
     with BytesIO() as fh:
@@ -19,30 +17,41 @@ def get_compressed_size(image: Image, quality: int=95):
     return size
 
 
-def score_image(path: str):
-    """Use JPEG compression ratio as a proxy for image complexity.
+def get_compression_ratio(image: Image) -> float:
+    """Return the lossless compression ratio for an image."""
+    lossless = get_compressed_size(image, 100)
+    compressed = get_compressed_size(image, 75)
+    return compressed / lossless
 
-    Histogram can be used to filter image for color saturation and variation.
 
-    :param path: Path to the JPEG image to score.
+def get_spatial_information_score(image: Image) -> float:
+    """Use Sobel filters to find the edge energy of an image.
+
+    .. math::
+        SI_r = \sqrt{S_v^2 + S_h^2}
+
+        SI_{mean} = \frac{1}{P}\sum{SI_r,}
+
+    Where :math:`SI_r` is the spatial energy for each pixel and :math:`P` the
+    number of pixels.
+
+    .. seealso:: http://vintage.winklerbros.net/Publications/qomex2013si.pdf
     """
-    img = Image.open(path)
-    blurred = img.convert('L').filter(ImageFilter.GaussianBlur(3.5))
-    size1 = get_compressed_size(img, 95)
-    size2 = get_compressed_size(blurred, 95)
-    hist = np.histogram(np.asarray(img), bins=6)[0]
-    return (size1 / size2), hist
+    img = np.asarray(image)
+    num_pixels = img.shape[0] * img.shape[1]
+    energy = np.sum(np.sqrt(sobel_v(img) ** 2 + sobel_h(img) ** 2))
+    return energy / num_pixels
 
 
-def score_images(path, pattern: str=None):
-    """Return a score & histogram for all images in a path."""
-    rv = []
-    for filename in os.listdir(path):
-        if not('png' in filename or 'jpg' in filename):
-            continue
-        if pattern and pattern not in filename:
-            continue
-        filename = os.path.join(path, filename)
-        rv.append((filename, *score_image(filename)))
-    return rv
+def score_image(image: Image):
+    """Return the JPEG compression ratio and spatial complexity of an image.
 
+    Gray-scaling images prevents color from impacting compression performance.
+
+    :param image: Pillow Image instance.
+    """
+    if image.mode != 'L':
+        image = image.convert('L')
+    cr = get_compression_ratio(image)
+    si = get_spatial_information_score(image)
+    return cr, si

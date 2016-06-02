@@ -10,8 +10,12 @@ class UpdateRepositoryMedia(Command):
 
     :param name: Repository to update.
     """
-    def __init__(self, name):
+    def __init__(self, repo_id, name):
+        self.repo_id = repo_id
         self.name = name
+
+    def __repr__(self):
+        return "<{} name={}>".format(self.__class__.__qualname__, self.name)
 
 
 class UpdateRepositoryScreenshot(Command):
@@ -25,14 +29,19 @@ class UpdateRepositoryScreenshot(Command):
             "static/github/fs/37be0d5d4911.hp.png"
         )
 
-    :param name: Repository the URL belongs to
-    :param url: URL to screenshot
-    :param destination: Local path to save the image
+    :param repo_id: Internal ID of the repository.
+    :param name: Repository the URL belongs to.
+    :param url: URL to screenshot.
+    :param destination: Local path to save the image.
     """
-    def __init__(self, name: str, url: str, destination: str):
+    def __init__(self, repo_id: int, name: str, url: str, destination: str):
+        self.repo_id = repo_id
         self.name = name
         self.url = url
         self.destination = destination
+
+    def __repr__(self):
+        return "<{} name={}>".format(self.__class__.__qualname__, self.name)
 
 
 class CreateResizedScreenshot(Command):
@@ -59,9 +68,8 @@ class CreateResizedScreenshot(Command):
         self.destination = destination
 
     def __repr__(self):
-        return '{}({}, {}, {}, {})'.format(
-            self.__class__.__name__, self.name, self.source,
-            self.destination, self.size)
+        return '<{} name={} size={}>'.format(self.__class__.__qualname__,
+                                             self.name, self.size)
 
 
 class OptimizeImage(Command):
@@ -105,7 +113,7 @@ class CreateHeaderCollage(Command):
 
 
 class CalculateImageComplexityScores(Command):
-    """Calculate a complexity score of all images in a folder, and save the
+    """Calculate a complexity score for all images in a folder, saving the
     results to a CSV file::
 
         cmd = CalculateImageComplexityScores(
@@ -115,8 +123,8 @@ class CalculateImageComplexityScores(Command):
         )
 
     :param path: Directory of images to calculate scores for.
-    :param destination: File to save results to.
-    :param pattern: Only include files that contain this value.
+    :param destination: Destination to save CSV results to.
+    :param pattern: (Optional) Filter to images containing this value.
     """
     def __init__(self, path: str, destination: str, pattern: str=None):
         self.path = path

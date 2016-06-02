@@ -1,1 +1,1 @@
-cp /tmp/postgresql.conf /var/lib/postgresql/data/postgresql.conf
+mv /tmp/postgresql.conf /var/lib/postgresql/data/postgresql.conf

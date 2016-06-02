@@ -1,53 +1,11 @@
 import datetime
-import os
-import time
 
-from dateutil import parser
 import numpy as np
 import pandas as pd
 
-from growser.app import app, bigquery, db, log, storage
-from growser.cmdr import Handles, Command
-from growser.google import (DownloadBucketPath, DeleteTable,
-                            ExportTableToCSV, PersistQueryToTable)
-
-
-class ProcessGithubArchive(Command):
-    def __init__(self, date):
-        self.date = date
-
-
-class ProcessGithubArchiveHandler(Handles[ProcessGithubArchive]):
-    def handle(self, cmd: ProcessGithubArchive):
-        """Download the prior days event data from Github Archive"""
-        cmd.date = parser.parse(cmd.date).date()
-
-        today = datetime.date.today()
-        if not cmd.date:
-            cmd.date = today - datetime.timedelta(days=1)
-
-        if cmd.date >= today:
-            raise ValueError('Date must occur prior to current date')
-
-        log.info("Update Github Archive for {}".format(cmd.date))
-
-        bucket_path = "events"
-        bucket = app.config.get('BIGQUERY_EXPORT_BUCKET')
-        import_path = app.config.get('BIGQUERY_IMPORT_PATH')
-        local_path = os.path.join(import_path, bucket_path)
-
-        # Export the events from BigQuery to Google Cloud Storage
-        export_daily_events_to_csv(
-            bigquery, cmd.date.year, cmd.date.month, cmd.date.day)
-
-        # Download
-        filenames = DownloadBucketPath(storage) \
-            .run(bucket, bucket_path, local_path)
-
-        batch = BatchManager(db.engine, 'data/csv/repos.csv',
-                             'data/csv/logins.csv')
-        for filename in filenames:
-            batch.process_batch(filename)
+from growser.app import app, log
+from growser.tasks_old import BlockingJobPipeline
+from growser.google import DeleteTable, ExportTableToCSV, PersistQueryToTable
 
 
 class BatchManager:
@@ -171,21 +129,21 @@ class Source:
             self.delta.to_csv(fh, header=False, index=False)
 
 
-def export_daily_events_to_csv(api, year: int, month: int, day: int):
-    _export_query_to_csv(api, year, month, day)
+def export_daily_events_to_csv(bigquery, year: int, month: int, day: int):
+    _export_query_to_csv(bigquery, year, month, day)
 
 
-def export_monthly_events_to_csv(service, year: int, month: int):
-    _export_query_to_csv(service, year, month)
+def export_monthly_events_to_csv(bigquery, year: int, month: int):
+    _export_query_to_csv(bigquery, year, month)
 
 
-def export_yearly_events_to_csv(api, year: int):
+def export_yearly_events_to_csv(bigquery, year: int):
     if datetime.datetime.now().year <= year:
         raise Exception('Archive not available for current year')
-    _export_query_to_csv(api, year)
+    _export_query_to_csv(bigquery, year)
 
 
-def _export_query_to_csv(api, year: int, month: int=None, day: int=None):
+def _export_query_to_csv(bigquery, year: int, month: int=None, day: int=None):
     """Export [watch, fork] events from Google BigQuery to Cloud Storage."""
     month = str(month).zfill(2) if month else ''
     day = str(day).zfill(2) if day else ''
@@ -246,28 +204,8 @@ def _export_query_to_csv(api, year: int, month: int=None, day: int=None):
     export_path = app.config.get('BIG_QUERY_EXPORT_PATH').format(date=for_date)
     query = query.format(table=table)
 
-    pipeline = BlockingJobPipeline(api)
+    pipeline = BlockingJobPipeline(bigquery)
     pipeline.add(PersistQueryToTable, query, export_table)
     pipeline.add(ExportTableToCSV, export_table, export_path)
     pipeline.add(DeleteTable, export_table)
     pipeline.run()
-
-
-class BlockingJobPipeline:
-    """Run a list of jobs in order."""
-    def __init__(self, service, block_duration: int=5):
-        self.service = service
-        self.block_duration = block_duration
-        self.jobs = []
-
-    def add(self, job, *args, **kwargs):
-        self.jobs.append((job, args, kwargs))
-
-    def run(self):
-        for job_class, args, kwargs in self.jobs:
-            log.debug("Running job " + job_class.__name__)
-            job = job_class(self.service)
-            job.run(*args, **kwargs)
-            while not job.is_complete:
-                log.info("Job not complete, waiting...")
-                time.sleep(self.block_duration)

@@ -21,7 +21,7 @@ from growser.handlers.media import (
 class UpdateRepositoryScreenshotTests(unittest.TestCase):
     def test_execute(self):
         cmd = UpdateRepositoryScreenshot(
-            "repo/name", "http://example.org/", "/tmp/destination.png")
+            1, "repo/name", "http://example.org/", "/tmp/destination.png")
 
         created = UpdateRepositoryScreenshotHandler()
         updated = UpdateRepositoryScreenshotHandler()

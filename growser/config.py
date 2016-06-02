@@ -1,16 +1,14 @@
 class DefaultConfig:
-    """Configuration values that do not change based on the environment"""
+    """Configuration values that do not change based on the environment."""
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     #: Modules that Celery will use for finding tasks
     CELERY_INCLUDE = (
-        'growser.tasks.github',
+        'growser.tasks_old.github',
         'growser.tasks'
     )
 
-    #: Restart Celery workers after it has processed this number of tasks
     CELERYD_MAX_TASKS_PER_CHILD = 100
-
     CELERY_TASK_SERIALIZER = 'pickle'
     CELERY_RESULT_SERIALIZER = 'pickle'
 
@@ -21,11 +19,15 @@ class DefaultConfig:
         'growser.handlers.recommendations'
     )
 
+    CMDR_QUERIES = (
+        'growser.handlers.queries',
+    )
+
 
 class BasicConfig(DefaultConfig):
-    """The configuration required to run Growser"""
+    """The configuration required to run Growser."""
     #: Enable debugging (logging, toolbar)
-    DEBUG = True
+    DEBUG = False
 
     #: GitHub username & personal access token
     GITHUB_OAUTH = ('', '')

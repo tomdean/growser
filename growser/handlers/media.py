@@ -20,6 +20,7 @@ from growser.commands.media import (
     UpdateRepositoryMedia,
     UpdateRepositoryScreenshot,
 )
+from growser.models import RepositoryTask
 from growser.tasks import score_images
 
 
@@ -33,13 +34,14 @@ THUMBNAIL_DIMENSIONS = (('ts', (150, 225)), ('md', (400, 600)))
 
 
 class ImageCreated(DomainEvent):
+    """New screenshot successfully created."""
     def __init__(self, name, path):
         self.name = name
         self.path = path
 
 
 class ImageUpdated(ImageCreated):
-    pass
+    """Existing screen has been updated."""
 
 
 class ImageOptimized(DomainEvent):
@@ -55,6 +57,7 @@ class HeaderCollageCreated(DomainEvent):
 
 
 class ImageComplexityScoresCalculated(DomainEvent):
+    """Image complexity scores saved to `destination`."""
     def __init__(self, destination):
         self.destination = destination
 
@@ -114,15 +117,14 @@ class UpdateRepositoryMediaHandler(Handles[UpdateRepositoryMedia]):
                 .format(hashid=h, page=p, folder=f, ext=e)
 
         for name, url in urls:
-            destination = image_path("fs", repo.hashid, name, "png")
-            yield UpdateRepositoryScreenshot(repo.name, url, destination)
+            path = image_path("fs", repo.hashid, name, "png")
+            yield UpdateRepositoryScreenshot(repo.repo_id, repo.name, url, path)
 
             for folder, size in THUMBNAIL_DIMENSIONS:
                 source = image_path(folder, repo.hashid, name, "jpg")
-                yield CreateResizedScreenshot(
-                    repo.name, size, destination, source)
+                yield CreateResizedScreenshot(repo.name, size, path, source)
 
-            yield OptimizeImage(repo.name, destination)
+            yield OptimizeImage(repo.name, path)
 
     @staticmethod
     def _find_readme_url(name: str, age: int=86400*14):
@@ -141,16 +143,22 @@ class UpdateRepositoryMediaHandler(Handles[UpdateRepositoryMedia]):
 
 
 class UpdateRepositoryScreenshotHandler(Handles[UpdateRepositoryScreenshot]):
-    subprocess = subprocess.call
-
     def handle(self, cmd: UpdateRepositoryScreenshot) \
             -> Union[ImageCreated, ImageUpdated]:
         """Invokes the PhantomJS binary to render a URLs' screenshot."""
         updated = Images.exists(cmd.destination)
+
         self.subprocess(PHANTOM_JS_CMD + [cmd.url, cmd.destination])
+
+        # @todo Move this to an event listener
+        RepositoryTask.add(cmd.repo_id, 'screenshot.hp')
+
         if updated:
             return ImageUpdated(cmd.name, cmd.destination)
         return ImageCreated(cmd.name, cmd.destination)
+
+    def subprocess(self, cmd):
+        return subprocess.call(cmd, stdout=subprocess.DEVNULL)
 
 
 class CreateResizedScreenshotHandler(Handles[CreateResizedScreenshot]):
@@ -208,29 +216,15 @@ class CreateHeaderCollageHandler(Handles[CreateHeaderCollage]):
         return HeaderCollageCreated(cmd.destination)
 
     def _filter_files(self, path):
-        images = []
-        for row in open(path).readlines():
-            if 'filename' in row:
-                continue
-
-            filename, score, histogram = row.strip().split(',')
-            score = float(score)
-            histogram = histogram[1:-1].strip().split(' ')
-            colors = list(map(int, filter(None, histogram)))
-            total = sum(colors)
-            max_color = max(colors)
-
-            if score > 3 or score <= 2 or (max_color / total) > 0.9:
-                continue
-
-            images.append((filename, score))
-
-        return sorted(images, key=lambda x: x[1], reverse=False)
+        df = pd.read_csv(path)
+        df = df[(df['edges'] > 0)]
+        df = df[df['edges'] >= df['edges'].mean()]
+        return df['filename'].values.tolist()
 
     def _get_resized_thumbnails(self, filenames, size):
         """Return a list of resized thumbnails."""
         rv = []
-        for filename, score in filenames:
+        for filename in filenames:
             image = Images.open(filename)
             image.thumbnail(size, Image.ANTIALIAS)
             rv.append(image)
@@ -239,22 +233,30 @@ class CreateHeaderCollageHandler(Handles[CreateHeaderCollage]):
 
 class CalculateImageComplexityHandler(Handles[CalculateImageComplexityScores]):
     def handle(self, cmd: CalculateImageComplexityScores):
-        filenames = []
-        for filename in os.listdir(cmd.path):
-            if cmd.pattern and cmd.pattern not in filename:
-                continue
-            filenames.append(os.path.join(cmd.path, filename))
+        """Use Celery to calculate the image complexity scores concurrently."""
+        filenames = self.get_filenames(cmd.path, cmd.pattern)[:1000]
 
         def batched(l, n):
             for i in range(0, len(l), n):
                 yield l[i:i+n]
 
-        tasks = map(score_images.s, batched(filenames, 100))
+        batch_size = 100
+        tasks = map(score_images.s, batched(filenames, batch_size))
         result = group(tasks).apply_async()
-        results = result.get(interval=1)
+        images = result.get(interval=1)
 
-        columns = ['filename', 'score', 'histogram']
-        df = pd.DataFrame(list(chain(*results)), columns=columns)
-        df.to_csv(cmd.destination, index=False)
+        self.to_csv(cmd.destination, list(chain(*images)))
 
         return ImageComplexityScoresCalculated(cmd.destination)
+
+    def get_filenames(self, path, pattern):
+        filenames = []
+        for filename in os.listdir(path):
+            if pattern and pattern not in filename:
+                continue
+            filenames.append(os.path.join(path, filename))
+        return filenames
+
+    def to_csv(self, destination, images):
+        df = pd.DataFrame(images, columns=['filename', 'compression', 'edges'])
+        df.to_csv(destination, index=False)
