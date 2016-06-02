@@ -71,16 +71,10 @@ Growser implements an anemic CQRS-inspired framework with goal of demonstrating
 how these patterns can be applied over time.
 
 1. **MVC+CRUD** - Single Read + Write Model, Single Database
-    1. Flask VC, SQLAlchemy R+W models
 1. **CQS** - Separate Read & Write Models, Single Database
-    1. Flask VC, DTO read model from SQLALchemy write model
 1. **CQRS** - Separate Read & Write Models, Separate Read & Write Databases
-    1. Redis as read-only data storage
-1. **CQRS+DDD** - Introduce DDD-style aggregate roots (AR)
-    1. Repositories + AR
-    1. AR replace command handlers
-    1. AR also subscribe to domain events
-1. **CQRS+DDD+ES** - Introduce event sourcing
+1. **CQRS+ES** - Introduce event sourcing
+1. **CQRS+ES+DDD** - Introduce DDD-style aggregate roots (AR)
 
 ### Event Sourcing & Event Stores
 
