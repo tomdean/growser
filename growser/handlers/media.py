@@ -145,7 +145,7 @@ class UpdateRepositoryMediaHandler(Handles[UpdateRepositoryMedia]):
 class UpdateRepositoryScreenshotHandler(Handles[UpdateRepositoryScreenshot]):
     def handle(self, cmd: UpdateRepositoryScreenshot) \
             -> Union[ImageCreated, ImageUpdated]:
-        """Invokes the PhantomJS binary to render a URLs' screenshot."""
+        """Invokes the PhantomJS binary to render a screenshot."""
         updated = Images.exists(cmd.destination)
 
         self.subprocess(PHANTOM_JS_CMD + [cmd.url, cmd.destination])

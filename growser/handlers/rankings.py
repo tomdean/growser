@@ -50,7 +50,7 @@ class UpdateRankingsHandler(Handles[UpdateRankings]):
     def alltime(self, cmd: UpdateAllTimeRankings):
         if not cmd.end_date:
             cmd.end_date = date.today() - timedelta(days=1)
-        cmd.start_date = date(2012, 3, 1)
+        cmd.start_date = date(2012, 1, 1)
         return self.handle(cmd)
 
     def handle(self, cmd: UpdateRankings) -> RankingsUpdated:

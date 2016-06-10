@@ -6,11 +6,14 @@ from urllib.parse import urlparse
 
 import requests
 
+#: Default expiration of 14 days
+DEFAULT_EXPIRES = 86400 * 14
 
-def get(url, params=None, expiry=86400, **kwargs):
+
+def get(url: str, params: dict=None, expires: int=DEFAULT_EXPIRES, **kwargs) -> str:
     """Wrapper around requests.get"""
     path = _url_to_path(url, params)
-    if os.path.exists(path) and expiry > time.time() - os.path.getctime(path):
+    if os.path.exists(path) and expires > time.time() - os.path.getctime(path):
         return gzip.open(path, 'rb').read()
 
     name = os.path.dirname(path)
@@ -23,7 +26,7 @@ def get(url, params=None, expiry=86400, **kwargs):
     return content
 
 
-def _url_to_path(url, params=None):
+def _url_to_path(url: str, params: dict=None) -> str:
     """Returns a filesystem-friendly string from a URL."""
     parts = urlparse(url)
     domain = parts.netloc

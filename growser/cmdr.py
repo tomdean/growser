@@ -12,6 +12,10 @@ class Command(Message):
     """Objects that mutate state."""
 
 
+class Coordinator(Command):
+    """Commands responsible for coordinating between multiple commands."""
+
+
 class DomainEvent(Message):
     """Objects that result from state mutation."""
 
@@ -25,7 +29,7 @@ T = TypeVar('T')
 
 
 class Handles(Generic[T]):
-    """Indicates that a class handles instances of command type `T`.
+    """Indicates that a class handles instances of type `T`.
 
     Example::
 
@@ -39,7 +43,7 @@ class Handles(Generic[T]):
             def handle_first(cmd: FirstCommand):
                 pass
 
-            def handle_second(cmd: SecondCommand:)
+            def handle_second(cmd: SecondCommand)
                 pass
     """
 
@@ -206,7 +210,6 @@ def scan_function(obj, klass: type=None):
         def handles(cmd):
 
     :param obj: Function to register as a handler.
-    :return
     """
     if type(obj) != FunctionType:
         raise TypeError('Expected FunctionType')
@@ -219,7 +222,8 @@ def scan_function(obj, klass: type=None):
 
     # Decorators using @handles(CommandType)
     if hasattr(handles, 'handlers') and obj in handles.handlers:
-        rv.append((handles.handlers[obj], Handler(klass, obj)))
+        if not any(cmd == handles.handlers[obj] for cmd, _ in rv):
+            rv.append((handles.handlers[obj], Handler(klass, obj)))
 
     return rv
 
@@ -238,10 +242,13 @@ class LocalCommandBus:
         invoker = HandlerInvoker(handler.klass, handler())
         rv = invoker.execute(cmd)
 
+        # Ideally a command should not return another command, but we're going
+        # to cheat for now.
         if isinstance(rv, Iterable):
             for result in rv:
                 if isinstance(result, Command):
                     self.execute(result)
+                # Our domain model has confirmed that state has been changed
                 if isinstance(result, DomainEvent):
                     self.publish(result)
 

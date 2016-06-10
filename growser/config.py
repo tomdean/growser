@@ -2,18 +2,14 @@ class DefaultConfig:
     """Configuration values that do not change based on the environment."""
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    #: Modules that Celery will use for finding tasks
-    CELERY_INCLUDE = (
-        'growser.tasks_old.github',
-        'growser.tasks'
-    )
-
+    CELERY_INCLUDE = ('growser.tasks',)
     CELERYD_MAX_TASKS_PER_CHILD = 100
     CELERY_TASK_SERIALIZER = 'pickle'
     CELERY_RESULT_SERIALIZER = 'pickle'
 
     CMDR_HANDLERS = (
         'growser.handlers.events',
+        'growser.handlers.github',
         'growser.handlers.media',
         'growser.handlers.rankings',
         'growser.handlers.recommendations'
@@ -32,7 +28,8 @@ class BasicConfig(DefaultConfig):
     #: GitHub username & personal access token
     GITHUB_OAUTH = ('', '')
 
-    #: Table Big Query will use for temporary storage during export
+    #: Table Big Query will use for temporary storage before exporting the
+    #: results to Cloud Storage.
     BIG_QUERY_EXPORT_TABLE = "github.events_for_export"
 
     #: The Google Storage path used by Big Query for exporting events. Refer to
