@@ -1,13 +1,14 @@
-from itertools import chain
+from itertools import chain, product
 import os
 import math
 import random
 import re
 from PIL import Image
 import subprocess
-from typing import Union
+from typing import List, Union
 
 from celery import group
+import numpy as np
 import pandas as pd
 
 from growser import httpcache
@@ -195,21 +196,21 @@ class OptimizeImageHandler(Handles[OptimizeImage]):
 class CreateHeaderCollageHandler(Handles[CreateHeaderCollage]):
     def handle(self, cmd: CreateHeaderCollage) -> HeaderCollageCreated:
         """Create a grid of screenshots to use for the homepage."""
+        size = (cmd.thumbnail_width, cmd.thumbnail_width * 2)
+
+        # Load the first image to determine our width/height
         images = self._filter_files(cmd.path)
-        images = self._get_resized_thumbnails(images, cmd.thumbnail_sizes)
+        first = self._get_resized_thumbnails(images[:1], size)[0]
 
-        width = images[0].size[0]
-        height = images[0].size[1]
-        max_width = cmd.header_sizes[0]
-        max_height = cmd.header_sizes[1]
+        width, height = first.size
+        x, y = cmd.grid_size
 
-        x = math.ceil(max_width / width)
-        y = math.ceil(max_height / height)
+        # Pick a sample of the images based on the size of the grid
+        images = random.sample(images, cmd.grid_size[0] * cmd.grid_size[1])
+        images = self._get_resized_thumbnails(images, first.size)
 
-        images = random.sample(images, x * y)
         img = Images.new("RGB", (width * x, height * y))
-
-        for row, col in [(row, col) for row in range(y) for col in range(x)]:
+        for row, col in product(range(y), range(x)):
             img.paste(images[row * x + col], (col * width, row * height))
         img.save(cmd.destination)
 
@@ -217,11 +218,22 @@ class CreateHeaderCollageHandler(Handles[CreateHeaderCollage]):
 
     def _filter_files(self, path):
         df = pd.read_csv(path)
+        df = df.sort_values('compression', ascending=False)
+
+        # Remove single-color images and those less than the mean
         df = df[(df['edges'] > 0)]
         df = df[df['edges'] >= df['edges'].mean()]
+
+        # Exclude images where top 3 colors >= 90% of total color distribution
+        def color_pct(x):
+            return np.sum(np.sort(x[::, 0] / np.sum(x[::, 0]))[-3:])
+
+        df['histogram'] = df['histogram'].apply(eval).apply(np.asarray)
+        df = df[df['histogram'].map(color_pct) <= 0.915]
+
         return df['filename'].values.tolist()
 
-    def _get_resized_thumbnails(self, filenames, size):
+    def _get_resized_thumbnails(self, filenames, size) -> List[Image.Image]:
         """Return a list of resized thumbnails."""
         rv = []
         for filename in filenames:
@@ -234,7 +246,7 @@ class CreateHeaderCollageHandler(Handles[CreateHeaderCollage]):
 class CalculateImageComplexityHandler(Handles[CalculateImageComplexityScores]):
     def handle(self, cmd: CalculateImageComplexityScores):
         """Use Celery to calculate the image complexity scores concurrently."""
-        filenames = self.get_filenames(cmd.path, cmd.pattern)[:1000]
+        filenames = self.get_filenames(cmd.path, cmd.pattern)
 
         def batched(l, n):
             for i in range(0, len(l), n):
@@ -258,5 +270,6 @@ class CalculateImageComplexityHandler(Handles[CalculateImageComplexityScores]):
         return filenames
 
     def to_csv(self, destination, images):
-        df = pd.DataFrame(images, columns=['filename', 'compression', 'edges'])
+        df = pd.DataFrame(images, columns=['filename', 'compression',
+                                           'edges', 'histogram'])
         df.to_csv(destination, index=False)

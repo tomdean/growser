@@ -1,7 +1,7 @@
 from collections import Iterable
 from inspect import getmembers
 from types import FunctionType, GeneratorType, ModuleType
-from typing import Callable, Generic, TypeVar
+from typing import Callable, Generic, List, TypeVar
 
 
 class Message:
@@ -196,7 +196,7 @@ def scan_class(klass: type):
     return rv
 
 
-def scan_function(obj, klass: type=None):
+def scan_function(obj, klass: type=None) -> List[tuple]:
     """Determine if a function or unbound class method is a handler.
 
     The class bound to the function is determined by either the presence

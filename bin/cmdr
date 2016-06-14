@@ -118,6 +118,8 @@ def execute(command: str, args: tuple):
     for arg in args:
         if arg[0] in ('(', '[') and arg[-1] in (')', ']'):
             arg = tuple(map(type_arg, arg[1:-1].split(',')))
+        else:
+            arg = type_arg(arg)
         cleaned_args.append(arg)
 
     bus = commands(app)

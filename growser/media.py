@@ -54,4 +54,5 @@ def score_image(image: Image):
         image = image.convert('L')
     cr = get_compression_ratio(image)
     si = get_spatial_information_score(image)
-    return cr, si
+    hg = np.histogram(image, bins=6)
+    return cr, si, tuple(zip(*hg))

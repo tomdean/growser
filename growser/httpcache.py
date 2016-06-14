@@ -10,7 +10,7 @@ import requests
 DEFAULT_EXPIRES = 86400 * 14
 
 
-def get(url: str, params: dict=None, expires: int=DEFAULT_EXPIRES, **kwargs) -> str:
+def get(url: str, params: dict=None, expires: int=DEFAULT_EXPIRES, **kwargs) -> bytes:
     """Wrapper around requests.get"""
     path = _url_to_path(url, params)
     if os.path.exists(path) and expires > time.time() - os.path.getctime(path):

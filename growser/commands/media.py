@@ -88,28 +88,28 @@ class OptimizeImage(Command):
 
 
 class CreateHeaderCollage(Command):
-    """Create the homepage mast header.
+    """Create NxM grid of screenshots.
 
     Example::
 
-        cmd = CreateHeaderCollageHandler(
+        cmd = CreateHeaderCollage(
             "data/csv/collage.csv",
             "static/img/bg.50.png",
-            (50, 50),
-            (1200, 300)
+            50,
+            (24, 5)
         )
 
     :param path: Path to a file containing a list of files to be used.
     :param destination: Path to save the header.
-    :param thumbnail_sizes: The max width/height when resizing thumbnails.
-    :param header_sizes: The max width/height for the header.
+    :param thumbnail_width: Resize thumbnails to this width (pixels).
+    :param grid_size: Size of the grid to create
     """
-    def __init__(self, path: str, destination: str,  thumbnail_sizes: tuple,
-                 header_sizes: tuple):
+    def __init__(self, path: str, destination: str,  thumbnail_width: int,
+                 grid_size: tuple):
         self.path = path
         self.destination = destination
-        self.thumbnail_sizes = thumbnail_sizes
-        self.header_sizes = header_sizes
+        self.thumbnail_width = thumbnail_width
+        self.grid_size = grid_size
 
 
 class CalculateImageComplexityScores(Command):
