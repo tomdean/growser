@@ -73,7 +73,7 @@ class Handler:
         handler is a class method.
 
         :param klass: Class instance `func` is expecting.
-        :param func: Callable responsible for handling commands of type `klass.
+        :param func: Callable responsible for handling commands of type `klass`.
         """
         self.klass = klass
         self.func = func
@@ -121,7 +121,7 @@ class Registry:
     Example::
 
         registry = HandlerRegistry()
-        registry.register(growser.handlers.events)
+        registry.scan(growser.handlers.events)
     """
     def __init__(self):
         self.handlers = {}
@@ -217,7 +217,9 @@ def scan_function(obj, klass: type=None) -> List[tuple]:
     rv = []
     # Method type hints e.g. def name(command: Type)
     for param, param_type in obj.__annotations__.items():
-        if issubclass(param_type, Message) and param != 'return':
+        if not isinstance(param_type, type) or param == 'return':
+            continue
+        if issubclass(param_type, Message):
             rv.append((param_type, Handler(klass, obj)))
 
     # Decorators using @handles(CommandType)
@@ -242,13 +244,12 @@ class LocalCommandBus:
         invoker = HandlerInvoker(handler.klass, handler())
         rv = invoker.execute(cmd)
 
-        # Ideally a command should not return another command, but we're going
-        # to cheat for now.
+        # Allow commands to return commands to execute - will be removed after
+        # event listeners are integrated.
         if isinstance(rv, Iterable):
             for result in rv:
                 if isinstance(result, Command):
                     self.execute(result)
-                # Our domain model has confirmed that state has been changed
                 if isinstance(result, DomainEvent):
                     self.publish(result)
 

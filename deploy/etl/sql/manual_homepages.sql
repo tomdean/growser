@@ -34,3 +34,5 @@ UPDATE repository SET homepage='https://braydie.gitbooks.io/how-to-be-a-programm
 UPDATE repository SET homepage='http://airbnb.io/caravel/' WHERE name='airbnb/caravel';
 UPDATE repository SET homepage='https://spark.apache.org/' WHERE name='apache/spark';
 UPDATE repository SET language='Rust' WHERE name='servo/servo';
+UPDATE repository SET homepage='https://git-scm.com/' WHERE name='git/git';
+UPDATE repository SET homepage='https://clickhouse.yandex/' WHERE name='yandex/ClickHouse';

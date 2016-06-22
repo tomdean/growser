@@ -58,7 +58,7 @@ def update_repository(cmd: UpdateFromGitHubAPI) \
         num_watchers=int(rsp['subscribers_count'])
     )
 
-    if rv.homepage != '' and rv.homepage[:4] != 'http':
+    if '.' in rv.homepage and ' ' not in rv.homepage and rv.homepage[:4] != 'http':
         rv.homepage = 'http://' + rv.homepage
 
     if len(rv.homepage) >= 250:
@@ -76,7 +76,8 @@ class BatchUpdateGitHubAPIHandler(Handles[BatchUpdateFromGitHubAPI]):
         if cmd.limit > limit['rate']['remaining']:
             raise ValueError('Exceeds current API limit: {}'.format(limit))
 
-        repos = get_repositories(cmd.limit, cmd.task_window, cmd.rating_window)
+        repos = get_repositories(cmd.limit, cmd.task_window,
+                                 cmd.rating_window, cmd.min_events)
         tasks = [UpdateFromGitHubAPI(repo.name) for repo in repos]
 
         def batched(l, n):
@@ -87,9 +88,9 @@ class BatchUpdateGitHubAPIHandler(Handles[BatchUpdateFromGitHubAPI]):
             self._execute_batch(batch)
 
     def _execute_batch(self, batch: List[UpdateFromGitHubAPI]):
-        """Manage updating a single batch of repositories from the API."""
-        celery_tasks = map(run_command.s, batch)
-        results = group(celery_tasks).apply_async().get(interval=1)
+        """Process a single batch of updates."""
+        tasks = map(run_command.s, batch)
+        results = group(tasks).apply_async().get(interval=1)
 
         updated = [r for r in results if isinstance(r, RepositoryUpdated)]
         missing = [r for r in results if isinstance(r, RepositoryNotFound)]
@@ -146,8 +147,8 @@ class GitHubAPIWrapper:
         return self.request(['rate_limit'])
 
 
-def get_repositories(limit: int, task_days: int, rating_days: int):
-    # Exclude recently updated repositories
+def get_repositories(limit: int, task_days: int, rating_days: int, min_events: int):
+    # Exclude recently updated repositories @todo: Move to query
     tasks = and_(
         RepositoryTask.name == 'github.api.repos',
         RepositoryTask.repo_id == Rating.repo_id,
@@ -159,7 +160,7 @@ def get_repositories(limit: int, task_days: int, rating_days: int):
         .filter(~exists().where(tasks)) \
         .filter(Rating.created_at >= date.today() - timedelta(days=rating_days)) \
         .group_by(Rating.repo_id) \
-        .having(func.count(1) >= 50) \
+        .having(func.count(1) >= min_events) \
         .order_by(func.count(1).desc())
 
     # Return (name, num_events)

@@ -1,18 +1,18 @@
 {% extends "layout.min.html" %}
-{% block title %}Browse{% endblock %}
+{% block title %}Browse Open Source Projects{% endblock %}
 
 {% block header %}
     {%- set tabs = [
+        ("This Week", "w"),
+        ("This Month", "m"),
         ("Recent", None),
-        ("All Time", "a"),
-        ("Month", "m"),
-        ("Week", "w")
+        ("All Time", "a")
     ] -%}
     {%- set info = {
-        None: "in the past <u>90 days</u>",
+        None: "in the prior <u>90 days</u>",
         "a": "",
-        "m": "in the past <u>30 days</u>",
-        "w": "in the past <u>7 days</u>"
+        "m": "in the prior <u>30 days</u>",
+        "w": "in the prior <u>7 days</u>"
     } -%}
     <div class="page-header-content">
         <h1>Browse <a>{{ ctx.language|default("All", true) }}</a> Open Source Projects</h1>

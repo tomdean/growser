@@ -34,7 +34,7 @@ class BasicConfig(DefaultConfig):
 
     #: The Google Storage path used by Big Query for exporting events. Refer to
     #: https://goo.gl/dSWT6U for additional information.
-    BIG_QUERY_EXPORT_PATH = "gs://my-bicket/events/events_{date}_*.csv.gz"
+    BIG_QUERY_EXPORT_PATH = "gs://my-bucket/events/events_{date}_*.csv.gz"
 
     #: Local path to download events
     LOCAL_IMPORT_PATH = "data/events"
@@ -55,4 +55,4 @@ class BasicConfig(DefaultConfig):
     BROKER_URL = ""
 
     #: Celery backend for persisting task results
-    CELERY_BACKEND = ""
+    CELERY_RESULT_BACKEND = ""

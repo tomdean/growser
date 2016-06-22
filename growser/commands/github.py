@@ -10,8 +10,8 @@ class UpdateFromGitHubAPI(Command):
 
 
 class BatchUpdateFromGitHubAPI(Command):
-    def __init__(self, limit: int, batch_size: int,
-                 rating_window: int=90, task_window: int=30):
+    def __init__(self, limit: int, batch_size: int, rating_window: int=90,
+                 task_window: int=30, min_events: int=100):
         """Update local repository data using the GitHub API.
 
         For example, to update 1,250 repositories in batches of 100 based on the
@@ -27,6 +27,7 @@ class BatchUpdateFromGitHubAPI(Command):
                               events within this window of days.
         :param task_window: Don't include repositories that have already been
                             updated within this number of days.
+        :param min_events: Minimum number of events within `rating_window`.
 
         ..note:: Will be deprecated once event listeners have been implemented.
         """
@@ -34,3 +35,4 @@ class BatchUpdateFromGitHubAPI(Command):
         self.batch_size = batch_size
         self.rating_window = rating_window
         self.task_window = task_window
+        self.min_events = min_events

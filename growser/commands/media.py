@@ -44,6 +44,27 @@ class UpdateRepositoryScreenshot(Command):
         return "<{} name={}>".format(self.__class__.__qualname__, self.name)
 
 
+class BatchUpdateRepositoryScreenshots(Command):
+    """Update screenshots for multiple repositories.
+
+    Example::
+
+        BatchUpdateRepositoryScreenshots(1000, 180, 30)
+
+    :param limit: Total number of repositories to update.
+    :param rating_window: Sort repos by most ratings within this time frame
+    :param task_window: Exclude repos that have already been updated in
+                        `task_window` prior days.
+    :param min_events: Minimum events in `rating_window`.
+    """
+    def __init__(self, limit: int, rating_window: int=90,
+                 task_window: int=30, min_events: int=100):
+        self.limit = limit
+        self.rating_window = rating_window
+        self.task_window = task_window
+        self.min_events = min_events
+
+
 class CreateResizedScreenshot(Command):
     """Resize a screenshot.
 
@@ -130,3 +151,8 @@ class CalculateImageComplexityScores(Command):
         self.path = path
         self.destination = destination
         self.pattern = pattern
+
+
+class CalculateImageComplexityScore(Command):
+    def __init__(self, filename):
+        self.filename = filename

@@ -1,12 +1,11 @@
+from datetime import date, timedelta
 from typing import List
 
 from growser.cmdr import handles
-
-from datetime import date, timedelta
 from growser.models import Ranking, Recommendation, Repository
 from growser.queries import (
-    FindProject,
     FindCurrentRankings,
+    FindProject,
     FindRecommendations
 )
 
