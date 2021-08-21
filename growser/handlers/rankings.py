@@ -15,6 +15,7 @@ from growser.commands.rankings import (
 )
 from growser.db import from_sqlalchemy_table
 from growser.models import Ranking, Rating, Repository
+from typing import Generator
 
 
 class RankingsUpdated(DomainEvent):
@@ -53,7 +54,7 @@ class UpdateRankingsHandler(Handles[UpdateRankings]):
         cmd.start_date = date(2012, 1, 1)
         return self.handle(cmd)
 
-    def handle(self, cmd: UpdateRankings) -> RankingsUpdated:
+    def handle(self, cmd: UpdateRankings) -> Generator[RankingsUpdated, None, None]:
         """Update project rankings"""
         if not cmd.language:
             raise ValueError("Language must not be empty")
